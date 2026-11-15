@@ -77,14 +77,14 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 
 <section id="menu"><div class="wrap">
 <h2>Menu</h2>
-<p class="sub">Jo pasand aaye “+” dabayein, phir neeche se WhatsApp par order bhej dein.</p>
+<p class="sub">Jo pasand aaye “+” dabayein, phir neeche se order kar dein.</p>
 <div class="tabs" id="tabs"></div>
 <div class="grid" id="grid"></div>
 </div></section>
 
 <section id="book" class="band"><div class="wrap">
 <h2>Table book karein</h2>
-<p class="sub">Form bharein, booking WhatsApp par hamein chali jayegi.</p>
+<p class="sub">Form bharein, aapki booking hamein turant mil jayegi.</p>
 <form id="bookForm">
 <label>Aapka naam<input id="bn" required autocomplete="name"></label>
 <label>Phone number<input id="bph" type="tel" required inputmode="tel" autocomplete="tel"></label>
@@ -93,7 +93,7 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 <label>Waqt<input id="bt" type="time" required></label>
 </div>
 <label>Kitne log<select id="bp"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8+</option></select></label>
-<button class="btn wa" type="submit">WhatsApp par booking bhejein</button>
+<button class="btn wa" type="submit">Table book karein</button>
 </form>
 </div></section>
 
@@ -109,7 +109,7 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 
 <footer>© Aulie Bless. Khaana khao, khush raho.</footer>
 
-<div id="cart"><div><b id="ctotal"></b><div id="ccount" style="font-size:13px"></div></div><button class="btn wa" id="send">WhatsApp par order</button></div>
+<div id="cart"><div><b id="ctotal"></b><div id="ccount" style="font-size:13px"></div></div><button class="btn wa" id="send">Order karein</button></div>
 
 <dialog id="dlg"><form id="coForm"><h3>Order confirm karein</h3>
 <label>Aapka naam<input id="cn" required autocomplete="name"></label>
@@ -119,6 +119,7 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 <div><button class="btn teal" type="button" id="cl">📍 Meri location lagayein</button><small id="cls" style="display:block;margin-top:4px;color:var(--muted)">Delivery ke liye location ya pata zaroor dein.</small></div>
 <div class="two"><button class="btn" type="button" id="cc">Wapas</button><button class="btn wa" type="submit" id="cs">Order bhejein</button></div>
 </form></dialog>
+<dialog id="dlg2"><div style="padding:24px;text-align:center"><div style="font-size:44px;color:var(--em)" aria-hidden="true">✓</div><h3 id="dh" style="margin:8px 0"></h3><p id="did" style="font:600 20px 'Bodoni Moda',Georgia,serif;color:#80611a;margin:0 0 6px"></p><p id="ddt" style="margin:0 0 10px;font-size:15px"></p><p id="dtx" style="margin:0 0 16px;color:var(--muted);font-size:14px"></p><button class="btn" id="dok" type="button">Theek hai</button><button class="btn line" id="dwa" type="button" style="color:var(--em);border-color:var(--em)">WhatsApp par bhi bhejein</button></div></dialog>
 <div id="toast" role="status" style="position:fixed;left:12px;right:12px;bottom:90px;background:var(--em);color:var(--gold2);font-weight:500;border:1px solid var(--gold);border-radius:10px;padding:12px;text-align:center;display:none;z-index:9"></div>
 <script>
 var WA="919112626757";
@@ -163,8 +164,15 @@ function post(o){
   return Promise.race([f,new Promise(function(r){setTimeout(r,5000)})]);
 }
 function toast(t){var e=$("toast");e.textContent=t;e.style.display="block";setTimeout(function(){e.style.display="none"},6000)}
-function oid(){return "T"+Date.now().toString().slice(-6)}
+function oid(){return "T"+Date.now().toString().slice(-6)+Math.random().toString(36).slice(2,4).toUpperCase()}
 function wa(m){location.href="https://wa.me/"+WA+"?text="+encodeURIComponent(m)}
+var waMsg="";
+function done(h,id,det,txt,m){
+  $("dh").textContent=h;$("did").textContent=id;$("ddt").textContent=det;$("dtx").textContent=txt;waMsg=m||"";
+  $("dwa").style.display=m?"inline-block":"none";$("dlg2").showModal();
+}
+$("dok").onclick=function(){$("dlg2").close()};
+$("dwa").onclick=function(){wa(waMsg)};
 var loc="";
 $("cl").onclick=function(){
   var st=$("cls");
@@ -190,15 +198,16 @@ $("coForm").onsubmit=function(e){
     var m="Assalam o Alaikum! Order #"+id+"\nNaam: "+o.name+"\nPhone: "+o.phone+"\n"+o.mode+(o.note?" – "+o.note:"")+(o.location?"\nLocation: "+o.location:"")+"\n\n"+items.join("\n")+"\nTotal: "+rs(t);
     cart={};loc="";$("cls").textContent="Delivery ke liye location ya pata zaroor dein.";bar();items_ui();
     $("dlg").close();$("cs").disabled=false;$("cs").textContent="Order bhejein";
-    toast("Order #"+id+" mil gaya! WhatsApp par confirm karein.");
-    wa(m);
+    done("Order ho gaya!","Order #"+id,items.join(", ")+" · Total: "+rs(t),"Hum aapka order bana rahe hain. Zaroorat padi to "+o.phone+" par rabta karenge.",m);
   });
 };
 $("bookForm").onsubmit=function(e){
   e.preventDefault();
   var o={type:"booking",name:$("bn").value,phone:$("bph").value,date:$("bd").value,time:$("bt").value,people:$("bp").value};
   post(o).then(function(){
-    wa("Assalam o Alaikum! Table booking:\nNaam: "+o.name+"\nPhone: "+o.phone+"\nTareekh: "+o.date+"\nWaqt: "+o.time+"\nLog: "+o.people);
+    var m="Assalam o Alaikum! Table booking:\nNaam: "+o.name+"\nPhone: "+o.phone+"\nTareekh: "+o.date+"\nWaqt: "+o.time+"\nLog: "+o.people;
+    $("bookForm").reset();
+    done("Booking ho gayi!",o.date+" · "+o.time,o.people+" log · "+o.name,"Hum booking confirm karne ke liye "+o.phone+" par rabta karenge.",m);
   });
 };
 var items_ui=items;
