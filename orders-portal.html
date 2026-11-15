@@ -16,8 +16,10 @@ header{position:sticky;top:0;z-index:5;background:var(--em3);color:var(--gold2);
 header .wrap{display:flex;justify-content:space-between;align-items:center;gap:10px}
 header h1{font-size:22px;font-style:italic}
 .btn{border:1px solid var(--gold);background:var(--gold);color:#1a1405;font:600 15px Jost,sans-serif;padding:9px 18px;border-radius:6px;cursor:pointer}
-.btn.line{background:transparent;color:var(--gold2);padding:5px 12px;font-size:14px}
+.btn.line{background:transparent;color:var(--gold2);padding:5px 10px;font-size:14px}
 .btn.dark{background:var(--em);border-color:var(--em);color:var(--gold2)}
+.btn.stop{display:block;width:100%;background:var(--bad);border-color:var(--bad);color:#fff;font-size:18px;padding:14px;margin:12px 0}
+.btn.stop[hidden]{display:none}
 .btn:focus-visible,.tab:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .tabs{display:flex;gap:8px;overflow-x:auto;margin:14px 0}
 .tab{flex:none;border:1px solid var(--em);background:transparent;color:var(--em);font:500 15px Jost,sans-serif;padding:7px 18px;border-radius:999px;cursor:pointer}
@@ -43,10 +45,12 @@ a{color:var(--em)}
 </style>
 </head>
 <body>
-<header><div class="wrap"><h1>Aulie Bless · Orders</h1><div id="hb" hidden><button class="btn line" id="rf">Refresh</button> <button class="btn line" id="lo">Logout</button></div></div></header>
+<header><div class="wrap"><h1>Aulie Bless · Orders</h1><div id="hb" hidden><button class="btn line" id="tst">🔔 Test</button> <button class="btn line" id="rf">Refresh</button> <button class="btn line" id="lo">Logout</button></div></div></header>
 <div class="wrap">
 <div id="login"><form id="lf"><h3>Staff login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Orders kholein</button><div class="msg" id="lm" style="padding:0"></div></form></div>
 <div id="app" hidden>
+<div id="ws" class="msg" style="padding:10px 0 0;font-size:13px">Phone ko charging par rakhein aur ye page khula chhodein. 🔔 Test dabakar aawaz check kar lein.</div>
+<button class="btn stop" id="stop" hidden>🔕 Aawaz band karein</button>
 <div class="tabs" id="tabs"></div>
 <div id="st" class="msg" style="padding:0 0 6px"></div>
 <div id="nb" class="nb" hidden role="status"></div>
@@ -58,9 +62,40 @@ var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU
 var O=[],B=[],tab="Chal rahe",key="",seen=null,unread=0;
 var KS=["New","Preparing","Ready","Delivered"],KL={New:"Naya",Preparing:"Ban raha",Ready:"Tayyar",Delivered:"Diya gaya"};
 var $=function(i){return document.getElementById(i)};
-function esc(s){var e=document.createElement("div");e.textContent=s==null?"":s;return e.innerHTML}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function sm(u){u=String(u||"");return /^https:\/\/(www\.)?google\.com\/maps/.test(u)?u:""}
 function rs(n){return "Rs. "+Math.round(n).toLocaleString("en-US")}
 function tm(v){var d=new Date(v);if(isNaN(d))return "";var t=d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});return d.toDateString()===new Date().toDateString()?t:d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+t}
+
+/* ---- Aawaz, 30 second tak ---- */
+var AC=null,ringT=null,ringEnd=0,wl=null;
+function actx(){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume()}catch(e){}return AC}
+function tone(f,ms){
+  var a=actx();if(!a)return;
+  try{var o=a.createOscillator(),g=a.createGain();o.type="square";o.frequency.value=f;o.connect(g);g.connect(a.destination);
+  g.gain.setValueAtTime(.3,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+ms/1000);o.start();o.stop(a.currentTime+ms/1000)}catch(e){}
+}
+function ring(){
+  stopRing();ringEnd=Date.now()+30000;
+  var step=function(){
+    if(Date.now()>=ringEnd){stopRing();return}
+    tone(880,260);setTimeout(function(){tone(1175,260)},320);
+    try{if(navigator.vibrate)navigator.vibrate([300,150,300])}catch(e){}
+  };
+  step();ringT=setInterval(step,900);$("stop").hidden=false;
+}
+function stopRing(){if(ringT)clearInterval(ringT);ringT=null;$("stop").hidden=true}
+$("stop").onclick=stopRing;
+
+/* ---- Screen on rakhna ---- */
+function wake(){
+  if(!("wakeLock" in navigator)||wl||!key)return;
+  navigator.wakeLock.request("screen").then(function(l){
+    wl=l;$("ws").textContent="Screen on rahegi aur aawaz chalti rahegi. Page band na karein.";
+    l.addEventListener("release",function(){wl=null});
+  }).catch(function(){});
+}
+["touchstart","click"].forEach(function(ev){document.addEventListener(ev,function(){actx();wake()},{passive:true})});
 
 function post(o){o.key=key;return fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){})}
 function load(auto){
@@ -69,12 +104,17 @@ function load(auto){
     if(j.error){logout("Password galat hai.");return}
     O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New"}});
     B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
-    alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
+    alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
   }).catch(function(){$("st").textContent=auto?"Auto-refresh abhi nahi chala, internet check karein.":"Data nahi aaya. Internet check karein."});
 }
-function logout(m){key="";sessionStorage.removeItem("sk");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||""}
-$("lf").onsubmit=function(e){e.preventDefault();key=$("pw").value;sessionStorage.setItem("sk",key);load()};
+function logout(m){key="";stopRing();sessionStorage.removeItem("sk");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";if(wl){try{wl.release()}catch(e){}wl=null}}
+$("lf").onsubmit=function(e){
+  e.preventDefault();key=$("pw").value;sessionStorage.setItem("sk",key);actx();
+  try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(x){}
+  load();
+};
 $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
+$("tst").onclick=function(){actx();ring();try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(e){}};
 
 function alertNew(){
   var f=[];if(seen)O.forEach(function(o){if(!seen[o.id])f.push(o)});
@@ -83,7 +123,8 @@ function alertNew(){
   unread+=f.length;var o=f[f.length-1];
   $("nb").hidden=false;$("nb").textContent="🔔 "+unread+" naya order: #"+o.id+" · "+o.name+" (dekhne ke liye dabayein)";
   document.title="("+unread+") Naya order – Aulie Bless";
-  try{var a=new (window.AudioContext||window.webkitAudioContext)(),s=a.createOscillator(),g=a.createGain();s.connect(g);g.connect(a.destination);s.frequency.value=880;g.gain.value=.15;s.start();setTimeout(function(){s.stop();a.close()},450)}catch(e){}
+  ring();
+  try{if("Notification" in window&&Notification.permission==="granted")new Notification("Naya order #"+o.id,{body:o.name+" · "+rs(o.total),requireInteraction:true})}catch(e){}
 }
 $("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Chal rahe";render()};
 
@@ -107,10 +148,11 @@ function render(){
     L.sort(function(a,b){return act?(String(a.t)<String(b.t)?-1:1):(String(a.t)<String(b.t)?1:-1)});
     if(!L.length)h='<p class="msg">'+(act?"Abhi koi order pending nahi.":"Abhi koi mukammal order nahi.")+'</p>';
     L.forEach(function(o){
-      h+='<div class="card '+(o.pay==="Cancelled"?"Cancelled":esc(o.k))+'" data-row="'+o.row+'"><div class="top"><div><small>#'+esc(o.id)+' · '+tm(o.t)+' · <span class="chip">'+esc(o.mode)+'</span></small></div><div class="amt">'+rs(o.total)+'</div></div>'
-       +'<div class="items">'+o.items.split(", ").map(esc).join("<br>")+'</div>'
+      var mp=sm(o.loc);
+      h+='<div class="card '+(o.pay==="Cancelled"?"Cancelled":esc(o.k))+'" data-row="'+esc(o.row)+'"><div class="top"><div><small>#'+esc(o.id)+' · '+tm(o.t)+' · <span class="chip">'+esc(o.mode)+'</span></small></div><div class="amt">'+rs(o.total)+'</div></div>'
+       +'<div class="items">'+o.items.split(", ").map(function(x){return esc(x)}).join("<br>")+'</div>'
        +'<div>'+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'
-       +(o.note||o.loc?'<small>'+esc(o.note)+(o.loc?' · <a href="'+esc(o.loc)+'" target="_blank" rel="noopener">Map kholein</a>':'')+'</small>':'')
+       +(o.note||mp?'<small>'+esc(o.note)+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Map kholein</a>':'')+'</small>':'')
        +'<div class="ks">'+KS.map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
        +'<div class="pay">Paisa: <select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option value="'+s+'"'+(s===o.pay?' selected':'')+'>'+({Pending:"Baqaya",Paid:"Mil gaya",Cancelled:"Cancel"})[s]+'</option>'}).join("")+'</select></div></div>';
     });
@@ -120,9 +162,9 @@ function render(){
   v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);o.k=b.dataset.k;render();save(o)}});
   v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s);o.pay=s.value;render();save(o)}});
 }
-function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!document.hidden&&!(a&&a.tagName==="SELECT"))load(true)}
-setInterval(auto,20000);
-document.addEventListener("visibilitychange",function(){if(!document.hidden)auto()});
+function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!(a&&a.tagName==="SELECT"))load(true)}
+setInterval(auto,5000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden){auto();wake()}});
 key=sessionStorage.getItem("sk")||"";if(key)load();
 </script>
 </body>
