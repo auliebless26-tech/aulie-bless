@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Aulie Bless – Orders</title>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@0,500;1,500&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--em:#0d3b2e;--em3:#082a20;--gold:#c9a24b;--gold2:#e6cf92;--paper:#eef1ea;--ink:#12261f;--muted:#566860;--ok:#16794f;--bad:#b83227;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 Jost,system-ui,sans-serif;padding-bottom:40px}
+h1,h3{font-family:'Bodoni Moda',Georgia,serif;font-weight:500;margin:0;line-height:1.1}
+.wrap{max-width:720px;margin:0 auto;padding:0 14px}
+header{position:sticky;top:0;z-index:5;background:var(--em3);color:var(--gold2);border-bottom:1px solid var(--gold);padding:10px 0}
+header .wrap{display:flex;justify-content:space-between;align-items:center;gap:10px}
+header h1{font-size:22px;font-style:italic}
+.btn{border:1px solid var(--gold);background:var(--gold);color:#1a1405;font:600 15px Jost,sans-serif;padding:9px 18px;border-radius:6px;cursor:pointer}
+.btn.line{background:transparent;color:var(--gold2);padding:5px 12px;font-size:14px}
+.btn.dark{background:var(--em);border-color:var(--em);color:var(--gold2)}
+.btn:focus-visible,.tab:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.tabs{display:flex;gap:8px;overflow-x:auto;margin:14px 0}
+.tab{flex:none;border:1px solid var(--em);background:transparent;color:var(--em);font:500 15px Jost,sans-serif;padding:7px 18px;border-radius:999px;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--em);color:var(--gold2)}
+.card{background:#fff;border:1px solid #d5ddd3;border-left:5px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:12px}
+.card.New{border-left-color:var(--bad)}.card.Preparing{border-left-color:#d08a00}.card.Ready{border-left-color:var(--ok)}.card.Delivered,.card.Cancelled{border-left-color:#9aa8a0;opacity:.8}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.items{font:600 19px/1.35 Jost,sans-serif;margin:6px 0}
+.amt{font:500 21px 'Bodoni Moda',Georgia,serif;white-space:nowrap}
+small{color:var(--muted)}
+.ks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.ks button{border:1px solid var(--em);background:#fff;color:var(--em);font:500 14px Jost,sans-serif;padding:9px 2px;border-radius:6px;cursor:pointer}
+.ks button[aria-pressed="true"]{background:var(--em);color:var(--gold2)}
+select,input{font:inherit;padding:8px 10px;border:1px solid #b9c4ba;border-radius:6px;background:#fff;color:var(--ink);width:100%}
+.pay{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px}
+.pay select{width:auto}
+.chip{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:1px 9px;background:#e3e8e1}
+.nb{background:#fff0c2;border:1px solid var(--gold);border-radius:8px;padding:10px 12px;margin:12px 0;font-weight:600;cursor:pointer}
+.msg{color:var(--muted);text-align:center;padding:22px 0}
+#login{max-width:360px;margin:50px auto;background:#fff;border:1px solid #d5ddd3;border-radius:10px;padding:18px}
+#login form{display:grid;gap:10px}
+a{color:var(--em)}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>Aulie Bless · Orders</h1><div id="hb" hidden><button class="btn line" id="rf">Refresh</button> <button class="btn line" id="lo">Logout</button></div></div></header>
+<div class="wrap">
+<div id="login"><form id="lf"><h3>Staff login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Orders kholein</button><div class="msg" id="lm" style="padding:0"></div></form></div>
+<div id="app" hidden>
+<div class="tabs" id="tabs"></div>
+<div id="st" class="msg" style="padding:0 0 6px"></div>
+<div id="nb" class="nb" hidden role="status"></div>
+<div id="view"></div>
+</div>
+</div>
+<script>
+var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
+var O=[],B=[],tab="Chal rahe",key="",seen=null,unread=0;
+var KS=["New","Preparing","Ready","Delivered"],KL={New:"Naya",Preparing:"Ban raha",Ready:"Tayyar",Delivered:"Diya gaya"};
+var $=function(i){return document.getElementById(i)};
+function esc(s){var e=document.createElement("div");e.textContent=s==null?"":s;return e.innerHTML}
+function rs(n){return "Rs. "+Math.round(n).toLocaleString("en-US")}
+function tm(v){var d=new Date(v);if(isNaN(d))return "";var t=d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});return d.toDateString()===new Date().toDateString()?t:d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+t}
+
+function post(o){o.key=key;return fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){})}
+function load(auto){
+  if(!auto)$("st").textContent="Load ho raha hai…";
+  fetch(SCRIPT_URL+"?action=staff&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
+    if(j.error){logout("Password galat hai.");return}
+    O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New"}});
+    B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
+    alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
+  }).catch(function(){$("st").textContent=auto?"Auto-refresh abhi nahi chala, internet check karein.":"Data nahi aaya. Internet check karein."});
+}
+function logout(m){key="";sessionStorage.removeItem("sk");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||""}
+$("lf").onsubmit=function(e){e.preventDefault();key=$("pw").value;sessionStorage.setItem("sk",key);load()};
+$("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
+
+function alertNew(){
+  var f=[];if(seen)O.forEach(function(o){if(!seen[o.id])f.push(o)});
+  seen={};O.forEach(function(o){seen[o.id]=1});
+  if(!f.length)return;
+  unread+=f.length;var o=f[f.length-1];
+  $("nb").hidden=false;$("nb").textContent="🔔 "+unread+" naya order: #"+o.id+" · "+o.name+" (dekhne ke liye dabayein)";
+  document.title="("+unread+") Naya order – Aulie Bless";
+  try{var a=new (window.AudioContext||window.webkitAudioContext)(),s=a.createOscillator(),g=a.createGain();s.connect(g);g.connect(a.destination);s.frequency.value=880;g.gain.value=.15;s.start();setTimeout(function(){s.stop();a.close()},450)}catch(e){}
+}
+$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Chal rahe";render()};
+
+function save(o){post({type:"staff_order",row:o.row,kitchen:o.k,status:o.pay}).then(function(){setTimeout(function(){load(true)},1500)})}
+function render(){
+  var t=$("tabs");t.innerHTML="";
+  ["Chal rahe","Mukammal","Bookings"].forEach(function(n){
+    var b=document.createElement("button");b.className="tab";b.textContent=n;b.setAttribute("aria-pressed",n===tab);b.onclick=function(){tab=n;render()};t.appendChild(b);
+  });
+  var v=$("view"),h="";
+  if(tab==="Bookings"){
+    h='<h3 style="margin:8px 0">Table bookings</h3>';
+    if(!B.length)h+='<p class="msg">Abhi koi booking nahi.</p>';
+    B.slice().reverse().forEach(function(b){
+      var d=new Date(b.date),dd=isNaN(d)?esc(b.date):d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+      var tt=typeof b.time==="string"&&/^\d/.test(b.time)?b.time:(b.time?new Date(b.time).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}):"");
+      h+='<div class="card"><b>'+esc(b.name)+'</b> · '+esc(b.people)+' log<br><small>'+dd+' · '+esc(tt)+' · <a href="tel:'+esc(b.phone)+'">'+esc(b.phone)+'</a></small></div>';
+    });
+  }else{
+    var act=tab==="Chal rahe",L=O.filter(function(o){var done=o.k==="Delivered"||o.pay==="Cancelled";return act?!done:done});
+    L.sort(function(a,b){return act?(String(a.t)<String(b.t)?-1:1):(String(a.t)<String(b.t)?1:-1)});
+    if(!L.length)h='<p class="msg">'+(act?"Abhi koi order pending nahi.":"Abhi koi mukammal order nahi.")+'</p>';
+    L.forEach(function(o){
+      h+='<div class="card '+(o.pay==="Cancelled"?"Cancelled":esc(o.k))+'" data-row="'+o.row+'"><div class="top"><div><small>#'+esc(o.id)+' · '+tm(o.t)+' · <span class="chip">'+esc(o.mode)+'</span></small></div><div class="amt">'+rs(o.total)+'</div></div>'
+       +'<div class="items">'+o.items.split(", ").map(esc).join("<br>")+'</div>'
+       +'<div>'+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'
+       +(o.note||o.loc?'<small>'+esc(o.note)+(o.loc?' · <a href="'+esc(o.loc)+'" target="_blank" rel="noopener">Map kholein</a>':'')+'</small>':'')
+       +'<div class="ks">'+KS.map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
+       +'<div class="pay">Paisa: <select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option value="'+s+'"'+(s===o.pay?' selected':'')+'>'+({Pending:"Baqaya",Paid:"Mil gaya",Cancelled:"Cancel"})[s]+'</option>'}).join("")+'</select></div></div>';
+    });
+  }
+  v.innerHTML=h;
+  function find(el){var r=+el.closest(".card").dataset.row;return O.filter(function(o){return o.row===r})[0]}
+  v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);o.k=b.dataset.k;render();save(o)}});
+  v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s);o.pay=s.value;render();save(o)}});
+}
+function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!document.hidden&&!(a&&a.tagName==="SELECT"))load(true)}
+setInterval(auto,20000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)auto()});
+key=sessionStorage.getItem("sk")||"";if(key)load();
+</script>
+</body>
+</html>
