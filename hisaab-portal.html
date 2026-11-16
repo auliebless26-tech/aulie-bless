@@ -39,6 +39,7 @@ header h1{font-size:24px;font-style:italic}
 form{display:grid;gap:10px}
 label{font-weight:500;font-size:14px;display:grid;gap:3px}
 input,select{font:inherit;padding:9px 10px;border:1px solid #b9c4ba;border-radius:6px;background:#fff;color:var(--ink);width:100%}
+.srch{margin-bottom:14px}
 .row{padding:12px 0;border-top:1px solid #e3e8e1}
 .row:first-of-type{border-top:0}
 .row small{color:var(--muted)}
@@ -66,10 +67,11 @@ a{color:var(--em)}
 </div>
 </div>
 <script>
-var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec"; // Apps Script Web App URL yahan paste karein
-var D={o:[],e:[],b:[]},tab="Hisaab",rng="month",key="";
+var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
+var D={o:[],e:[],b:[]},tab="Hisaab",rng="month",key="",q="",fromD="",toD="";
 var $=function(i){return document.getElementById(i)};
-function esc(s){var e=document.createElement("div");e.textContent=s==null?"":s;return e.innerHTML}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function sm(u){u=String(u||"");return /^https:\/\/(www\.)?google\.com\/maps/.test(u)?u:""}
 function rs(n){return (n<0?"− ":"")+"Rs. "+Math.abs(Math.round(n)).toLocaleString("en-US")}
 function p2(n){return ("0"+n).slice(-2)}
 function dk(v){
@@ -80,6 +82,7 @@ var T=dk(new Date());
 function inR(k){
   if(!k)return false;
   if(rng==="all")return true;
+  if(rng==="custom")return (!fromD||k>=fromD)&&(!toD||k<=toD);
   if(rng==="day")return k===T;
   if(rng==="month")return k.slice(0,7)===T.slice(0,7);
   var a=new Date();a.setDate(a.getDate()-6);return k>=dk(a)&&k<=T;
@@ -143,8 +146,41 @@ function tabs(){
   });
 }
 function range(){
-  var r=[["day","Aaj"],["week","7 din"],["month","Is mahine"],["all","Sab"]];
-  return '<div class="tabs">'+r.map(function(x){return '<button class="tab" data-r="'+x[0]+'" aria-pressed="'+(rng===x[0])+'">'+x[1]+'</button>'}).join("")+'</div>';
+  var r=[["day","Aaj"],["week","7 din"],["month","Is mahine"],["all","Sab"],["custom","Tareekh chunein"]];
+  var h='<div class="tabs">'+r.map(function(x){return '<button class="tab" data-r="'+x[0]+'" aria-pressed="'+(rng===x[0])+'">'+x[1]+'</button>'}).join("")+'</div>';
+  if(rng==="custom")h+='<div class="two" style="margin-bottom:14px"><label>Kab se<input type="date" id="d1" value="'+esc(fromD)+'"></label><label>Kab tak<input type="date" id="d2" value="'+esc(toD)+'"></label></div>';
+  return h;
+}
+function orderRows(L){
+  L=L.slice().sort(function(a,b){return String(b.t)<String(a.t)?-1:1});
+  var h="";
+  L.forEach(function(o){
+    var mp=sm(o.loc);
+    h+='<div class="row" data-row="'+esc(o.row)+'"><div class="top"><div><b>'+esc(o.items)+'</b><br><small>#'+esc(o.id)+' · '+esc(o.day)+' · '+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+esc(o.mode)+' · Kitchen: '+esc(o.kitchen)+(o.note?' – '+esc(o.note):'')+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Map</a>':'')+'</small></div><div><div class="amt">'+rs(o.total)+'</div><span class="chip '+esc(o.status)+'">'+esc(o.status)+'</span></div></div>'
+     +'<div class="edit"><select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>'}).join("")+'</select><input type="number" min="0" inputmode="numeric" placeholder="Maal ki cost" value="'+(o.cost===""?"":esc(o.cost))+'"><button class="btn dark sm" data-save="1">Save</button></div></div>';
+  });
+  return h;
+}
+/* Orders list: search + summary. Search sab tareekhon mein hoti hai. */
+function olist(){
+  var box=$("ol");if(!box)return;
+  var qq=q.trim().toLowerCase(),qd=q.replace(/\D/g,"").replace(/^0+/,"");
+  var L=qq?D.o:calc().O;
+  if(qq)L=L.filter(function(o){
+    return String(o.name||"").toLowerCase().indexOf(qq)>=0||(qd.length>=3&&String(o.phone||"").replace(/\D/g,"").indexOf(qd)>=0);
+  });
+  var tot=function(o){return o.total};
+  var pd=L.filter(function(o){return o.status==="Paid"}),pn=L.filter(function(o){return o.status==="Pending"}),cn=L.filter(function(o){return o.status==="Cancelled"});
+  var h='<div class="stats"><div><small>Total orders</small><b>'+L.length+'</b></div><div><small>Paid</small><b>'+pd.length+'</b><small>'+rs(sum(pd,tot))+'</small></div><div><small>Baqaya (Pending)</small><b>'+pn.length+'</b><small>'+rs(sum(pn,tot))+'</small></div><div><small>Cancelled</small><b>'+cn.length+'</b></div></div>';
+  if(qq)h+='<p class="msg" style="padding:0 0 10px">“'+esc(q.trim())+'” ke liye sab tareekhon ke orders mein dhoonda gaya.</p>';
+  h+='<div class="card"><h3>Orders ('+L.length+')</h3>';
+  if(!L.length)h+='<p class="msg">'+(qq?"Is naam ya number ka koi order nahi mila.":"Is muddat mein koi order nahi.")+'</p>';
+  h+=orderRows(L)+'</div>';
+  box.innerHTML=h;
+  box.querySelectorAll("[data-save]").forEach(function(b){b.onclick=function(){
+    var r=b.closest(".row"),s=r.querySelector("select").value,c=r.querySelector("input").value;
+    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c}).then(wait);
+  }});
 }
 function render(){
   tabs();var v=$("view"),c=calc(),h="";
@@ -155,20 +191,13 @@ function render(){
     h+='<div class="card"><h3>Pichle 14 din: roz ka profit / loss</h3>'+chart()+'</div><div class="card"><h3>Sabse zyada bikne wale items</h3>'+best(c.O)+'</div>';
     h+='<p class="msg">Profit = Paid sale − maal ki cost − kharche.</p>';
   }else if(tab==="Orders"){
-    h=range()+'<div class="card"><h3>Orders ('+c.O.length+')</h3>';
-    var L=c.O.slice().sort(function(a,b){return String(b.t)<String(a.t)?-1:1});
-    if(!L.length)h+='<p class="msg">Is muddat mein koi order nahi.</p>';
-    L.forEach(function(o){
-      h+='<div class="row" data-row="'+o.row+'"><div class="top"><div><b>'+esc(o.items)+'</b><br><small>#'+esc(o.id)+' · '+esc(o.day)+' · '+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+esc(o.mode)+' · Kitchen: '+esc(o.kitchen)+(o.note?' – '+esc(o.note):'')+(o.loc?' · <a href="'+esc(o.loc)+'" target="_blank" rel="noopener">Map</a>':'')+'</small></div><div><div class="amt">'+rs(o.total)+'</div><span class="chip '+esc(o.status)+'">'+esc(o.status)+'</span></div></div>'
-       +'<div class="edit"><select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>'}).join("")+'</select><input type="number" min="0" inputmode="numeric" placeholder="Maal ki cost" value="'+(o.cost===""?"":o.cost)+'"><button class="btn dark sm" data-save="1">Save</button></div></div>';
-    });
-    h+='</div>';
+    h=range()+'<label class="srch">Naam ya mobile number se dhoondhein<input id="sq" type="search" placeholder="jaise Salman ya 97568" value="'+esc(q)+'" autocomplete="off"></label><div id="ol"></div>';
   }else if(tab==="Kharche"){
     h=range()+'<form class="card" id="ef"><h3>Kharcha likhein</h3><div class="two"><label>Tareekh<input type="date" id="ed" required value="'+T+'"></label><label>Qisam<select id="ec"><option>Rent</option><option>Bijli/Gas</option><option>Salary</option><option>Samaan</option><option>Marammat</option><option>Other</option></select></label></div><div class="two"><label>Raqam (Rs.)<input id="ea" type="number" min="1" required inputmode="numeric"></label><label>Note<input id="en" placeholder="optional"></label></div><button class="btn dark" type="submit">Kharcha save karein</button></form>';
     h+='<div class="card"><h3>Kharche: '+rs(c.ex)+'</h3>';
     if(!c.E.length)h+='<p class="msg">Is muddat mein koi kharcha nahi.</p>';
     c.E.slice().sort(function(a,b){return a.day<b.day?1:-1}).forEach(function(e){
-      h+='<div class="row"><div class="top"><div><b>'+esc(e.cat)+'</b><br><small>'+esc(e.day)+(e.note?' · '+esc(e.note):'')+'</small></div><div><div class="amt" style="color:var(--bad)">'+rs(e.amt)+'</div><button class="btn line sm" style="color:var(--bad);border-color:var(--bad)" data-del="'+e.row+'">Hatayein</button></div></div></div>';
+      h+='<div class="row"><div class="top"><div><b>'+esc(e.cat)+'</b><br><small>'+esc(e.day)+(e.note?' · '+esc(e.note):'')+'</small></div><div><div class="amt" style="color:var(--bad)">'+rs(e.amt)+'</div><button class="btn line sm" style="color:var(--bad);border-color:var(--bad)" data-del="'+esc(e.row)+'">Hatayein</button></div></div></div>';
     });
     h+='</div>';
   }else{
@@ -180,11 +209,18 @@ function render(){
     h+='</div>';
   }
   v.innerHTML=h;
-  v.querySelectorAll("[data-r]").forEach(function(b){b.onclick=function(){rng=b.dataset.r;render()}});
-  v.querySelectorAll("[data-save]").forEach(function(b){b.onclick=function(){
-    var r=b.closest(".row"),s=r.querySelector("select").value,c=r.querySelector("input").value;
-    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c}).then(wait);
+  v.querySelectorAll("[data-r]").forEach(function(b){b.onclick=function(){
+    rng=b.dataset.r;
+    if(rng==="custom"&&!fromD&&!toD){fromD=T.slice(0,8)+"01";toD=T}
+    render();
   }});
+  var d1=$("d1"),d2=$("d2");
+  if(d1)d1.onchange=function(){fromD=d1.value;render()};
+  if(d2)d2.onchange=function(){toD=d2.value;render()};
+  if(tab==="Orders"){
+    olist();
+    $("sq").oninput=function(){q=this.value;olist()};
+  }
   v.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){
     if(confirm("Ye kharcha hatana hai?")){busy(b);post({type:"admin_expense_del",row:b.dataset.del}).then(wait)}
   }});
@@ -212,7 +248,7 @@ function beep(){
   o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.value=0.15;o.start();
   setTimeout(function(){o.stop();a.close()},400)}catch(e){}
 }
-$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Hisaab Portal";tab="Orders";rng="day";render()};
+$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Hisaab Portal";tab="Orders";rng="day";q="";render()};
 function typing(){var a=document.activeElement;return a&&(a.tagName==="INPUT"||a.tagName==="SELECT")&&$("view").contains(a)}
 function auto(){if(key&&!$("app").hidden&&!document.hidden&&!typing())load(true)}
 setInterval(auto,30000);
