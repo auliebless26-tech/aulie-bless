@@ -49,7 +49,7 @@ h2{font-size:42px;margin-bottom:8px;color:var(--em)}
 .qty span{min-width:18px;text-align:center;font-weight:600}
 form{display:grid;gap:14px;background:#faf8f1;color:var(--ink);border:1px solid var(--gold);border-radius:10px;padding:24px;max-width:520px}
 label{font-weight:500;font-size:14px;display:grid;gap:4px}
-input,select{font:inherit;padding:11px 12px;border:1px solid #b9c4ba;border-radius:6px;background:#fff;color:var(--ink);width:100%}
+input,select,textarea{font:inherit;padding:11px 12px;border:1px solid #b9c4ba;border-radius:6px;background:#fff;color:var(--ink);width:100%}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .info{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 .info div{background:var(--card);border:1px solid #d5ddd3;border-top:3px solid var(--gold);border-radius:8px;padding:20px}
@@ -114,7 +114,14 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 <label>Phone number<input id="cp" type="tel" required inputmode="tel" autocomplete="tel"></label>
 <label>Order type<select id="cm"><option>Dine-in</option><option>Takeaway</option><option>Delivery</option></select></label>
 <label>Address or table number<input id="ca" placeholder="Delivery address or table #"></label>
+<label id="sal" hidden>Saved addresses<select id="sa"></select><button type="button" id="sdl" class="btn line" style="color:var(--em);border-color:var(--em);margin:0">Remove selected</button></label>
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sv" style="width:auto"> Save this address as <select id="sn" style="width:auto"><option>Home</option><option>Office</option><option>Other</option></select></label>
 <div><button class="btn teal" type="button" id="cl">📍 Share my location</button><small id="cls" style="display:block;margin-top:4px;color:var(--muted)">For delivery, please share your location or address.</small></div>
+<label>Cooking instructions (optional)<textarea id="ci" rows="2" maxlength="200" placeholder="e.g. make it spicy, extra mayo"></textarea></label>
+<div id="chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+<label>Coupon code (optional)<div style="display:flex;gap:8px"><input id="cpn" placeholder="e.g. WELCOME20" style="text-transform:uppercase"><button class="btn" type="button" id="cpa" style="margin:0">Apply</button></div></label>
+<small id="cpm" style="color:var(--muted)"></small>
+<div id="sum" style="font-weight:600"></div>
 <div class="two"><button class="btn" type="button" id="cc">Back</button><button class="btn wa" type="submit" id="cs">Send order</button></div>
 </form></dialog>
 <dialog id="dlg2"><div style="padding:24px;text-align:center"><div style="font-size:44px;color:var(--em)" aria-hidden="true">✓</div><h3 id="dh" style="margin:8px 0"></h3><p id="did" style="font:600 20px 'Bodoni Moda',Georgia,serif;color:#80611a;margin:0 0 6px"></p><p id="ddt" style="margin:0 0 10px;font-size:15px"></p><p id="dtx" style="margin:0 0 16px;color:var(--muted);font-size:14px"></p><button class="btn" id="dok" type="button">OK</button><button class="btn line" id="dwa" type="button" style="color:var(--em);border-color:var(--em)">Also send on WhatsApp</button></div></dialog>
@@ -183,20 +190,26 @@ $("cl").onclick=function(){
     loc="";st.textContent="Could not get location. Allow permission or type your address.";
   },{enableHighAccuracy:true,timeout:10000});
 };
-$("send").onclick=function(){$("dlg").showModal()};
+$("send").onclick=function(){
+  cpn={code:"",disc:0,free:""};$("cpn").value="";$("cpm").textContent="";abUI();sumUI();
+  try{var me=JSON.parse(localStorage.getItem("me")||"null");if(me){if(!$("cn").value)$("cn").value=me.n||"";if(!$("cp").value)$("cp").value=me.p||""}}catch(e){}
+  $("dlg").showModal();
+};
 $("cc").onclick=function(){$("dlg").close()};
 $("coForm").onsubmit=function(e){
   e.preventDefault();
   var id=oid(),l=[],t=0,items=[];
-  for(var k in cart){items.push(cart[k]+" x "+k);t+=cart[k]*price(k)}
+  for(var k in cart){items.push(cart[k]+" x "+k);l.push({n:k,q:cart[k],p:price(k)});t+=cart[k]*price(k)}
   if($("cm").value==="Delivery"&&!loc&&!$("ca").value.trim()){$("cls").textContent="For delivery, please share your location or address.";return}
-  var o={type:"order",id:id,name:$("cn").value,phone:$("cp").value,mode:$("cm").value,note:$("ca").value,location:loc,items:items.join(", "),total:t};
+  var dsc=Math.min(cpn.disc,t);
+  var o={type:"order",id:id,name:$("cn").value,phone:$("cp").value,mode:$("cm").value,note:$("ca").value,location:loc,items:items.join(", "),subtotal:t,total:t-dsc,coupon:cpn.code,instructions:$("ci").value,lines:JSON.stringify(l)};
+  abAdd(o);
   $("cs").disabled=true;$("cs").textContent="Sending…";
   post(o).then(function(){
-    var m="Hello! Order #"+id+"\nName: "+o.name+"\nPhone: "+o.phone+"\n"+o.mode+(o.note?" – "+o.note:"")+(o.location?"\nLocation: "+o.location:"")+"\n\n"+items.join("\n")+"\nTotal: "+rs(t);
-    cart={};loc="";$("cls").textContent="For delivery, please share your location or address.";bar();items_ui();
+    var m="Hello! Order #"+id+"\nName: "+o.name+"\nPhone: "+o.phone+"\n"+o.mode+(o.note?" – "+o.note:"")+(o.location?"\nLocation: "+o.location:"")+"\n\n"+items.join("\n")+"\nTotal: "+rs(o.total);
+    cart={};loc="";cpn={code:"",disc:0,free:""};$("ci").value="";$("cpn").value="";$("cpm").textContent="";$("sv").checked=false;$("cls").textContent="For delivery, please share your location or address.";bar();items_ui();
     $("dlg").close();$("cs").disabled=false;$("cs").textContent="Send order";
-    done("Order placed!","Order #"+id,items.join(", ")+" · Total: "+rs(t),"We are preparing your order. We will call "+o.phone+" if needed.",m);
+    done("Order placed!","Order #"+id,items.join(", ")+" · Total: "+rs(o.total),"We are preparing your order. We will call "+o.phone+" if needed.",m);
   });
 };
 $("bookForm").onsubmit=function(e){
@@ -208,6 +221,37 @@ $("bookForm").onsubmit=function(e){
     done("Booking received!",o.date+" · "+o.time,o.people+" guests · "+o.name,"We will contact you on "+o.phone+" to confirm your booking.",m);
   });
 };
+var cpn={code:"",disc:0,free:""};
+function sub(){var t=0;for(var k in cart)t+=cart[k]*price(k);return t}
+function sumUI(){var s=sub(),d=Math.min(cpn.disc,s);$("sum").textContent="Subtotal "+rs(s)+(d?" − Discount "+rs(d):"")+" = Total "+rs(s-d)+(cpn.free?" + "+cpn.free:"")}
+$("cpa").onclick=function(){
+  var c=$("cpn").value.trim(),m=$("cpm");
+  if(!c){cpn={code:"",disc:0,free:""};m.textContent="";sumUI();return}
+  m.textContent="Checking…";
+  fetch(SCRIPT_URL+"?action=coupon&code="+encodeURIComponent(c)+"&subtotal="+sub()).then(function(r){return r.json()}).then(function(j){
+    if(j.ok){cpn={code:j.code,disc:j.discount,free:j.freebie};m.textContent="Coupon applied ✓"+(j.freebie?" – "+j.freebie:"")}
+    else{cpn={code:"",disc:0,free:""};m.textContent=j.msg||"Invalid coupon."}
+    sumUI();
+  }).catch(function(){m.textContent="Could not check the coupon. Try again."});
+};
+["Extra spicy","Less spicy","Extra mayo","No onion"].forEach(function(t){
+  var b=document.createElement("button");b.type="button";b.className="tab";b.textContent=t;
+  b.onclick=function(){var e=$("ci");e.value+=(e.value?", ":"")+t};$("chips").appendChild(b);
+});
+function ab(){try{return JSON.parse(localStorage.getItem("ab")||"[]")}catch(e){return[]}}
+function abSave(a){try{localStorage.setItem("ab",JSON.stringify(a))}catch(e){}}
+function abUI(){
+  var a=ab(),s=$("sa");$("sal").hidden=!a.length;s.innerHTML="";
+  var o=document.createElement("option");o.value="";o.textContent="— Choose —";s.appendChild(o);
+  a.forEach(function(x,i){var p=document.createElement("option");p.value=i;p.textContent=x.n+": "+String(x.a).slice(0,40);s.appendChild(p)});
+}
+$("sa").onchange=function(){var x=ab()[this.value];if(x){$("ca").value=x.a;loc=x.l||"";$("cls").textContent=loc?"Saved location added ✓":""}};
+$("sdl").onclick=function(){var i=$("sa").value;if(i!==""){var a=ab();a.splice(+i,1);abSave(a);abUI()}};
+function abAdd(o){try{
+  localStorage.setItem("me",JSON.stringify({n:o.name,p:o.phone}));
+  var a=ab(),n=$("sn").value,x=$("ca").value.trim();
+  if($("sv").checked&&x){a=a.filter(function(y){return y.n!==n});a.push({n:n,a:x,l:loc});abSave(a)}
+}catch(e){}}
 var items_ui=items;
 var today=new Date().toISOString().slice(0,10);$("bd").min=today;
 tabs();items();
