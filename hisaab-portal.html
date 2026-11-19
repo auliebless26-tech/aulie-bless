@@ -69,7 +69,7 @@ a{color:var(--em)}
 </div>
 <script>
 var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
-var D={o:[],e:[],b:[]},tab="Hisaab",rng="month",key="",q="",fromD="",toD="";
+var D={o:[],e:[],b:[],s:[],p:[],w:[]},tab="Hisaab",rng="month",key="",q="",fromD="",toD="";
 var $=function(i){return document.getElementById(i)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function sm(u){u=String(u||"");return /^https:\/\/(www\.)?google\.com\/maps/.test(u)?u:""}
@@ -100,9 +100,12 @@ function load(auto){
   if(!auto)$("st").textContent="Load ho raha hai…";
   fetch(SCRIPT_URL+"?action=data&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
     if(j.error){sessionStorage.removeItem("ak");logout("Password galat hai.");return}
-    D.o=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,status:v[8]||"Pending",cost:v[9]===""?"":+v[9],loc:v[10]||"",kitchen:v[11]||"New",day:dk(v[1]),pm:v[21]||"",boy:String(v[22]||""),cashOk:v[23]==="YES"}});
+    D.o=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,status:v[8]||"Pending",cost:v[9]===""?"":+v[9],loc:v[10]||"",kitchen:v[11]||"New",day:dk(v[1]),pm:v[21]||"",boy:String(v[22]||""),cashOk:v[23]==="YES",used:String(v[24]||""),wa:String(v[25]||"")}});
     D.e=j.expenses.map(function(r){var v=r.v;return {row:r.row,day:dk(v[0]),cat:v[1],amt:+v[2]||0,note:v[3]||""}});
     D.b=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5],t:v[0]}});
+    D.s=(j.stock||[]).map(function(r){var v=r.v;return {name:String(v[0]),unit:String(v[1]),qty:+v[2]||0,low:+v[3]||0,avg:+v[4]||0,sup:String(v[5]||"")}});
+    D.p=(j.purchases||[]).map(function(r){var v=r.v;return {day:dk(v[0]),item:String(v[1]),sup:String(v[2]),unit:+v[5]||0}});
+    D.w=(j.waste||[]).map(function(r){var v=r.v;return {day:dk(v[0]),what:String(v[1]),qty:v[2],reason:String(v[3]||""),loss:+v[4]||0,type:String(v[5])}});
     newOrders();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
   }).catch(function(){$("st").textContent=auto?"Auto-refresh abhi nahi chala, internet check karein.":"Data nahi aaya. Internet ya SCRIPT_URL check karein.";});
 }
@@ -113,8 +116,8 @@ $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
 function calc(){
   var O=D.o.filter(function(o){return inR(o.day)}),E=D.e.filter(function(e){return inR(e.day)});
   var paid=O.filter(function(o){return o.status==="Paid"});
-  var sale=sum(paid,function(o){return o.total}),cost=sum(paid,function(o){return +o.cost||0}),ex=sum(E,function(e){return e.amt});
-  return {O:O,E:E,paid:paid,sale:sale,cost:cost,ex:ex,net:sale-cost-ex,
+  var sale=sum(paid,function(o){return o.total}),cost=sum(paid,function(o){return +o.cost||0}),ex=sum(E,function(e){return e.amt}),wl=sum(D.w.filter(function(w){return inR(w.day)}),function(w){return w.loss});
+  return {O:O,E:E,paid:paid,sale:sale,cost:cost,ex:ex,wl:wl,net:sale-cost-ex-wl,
     pend:sum(O.filter(function(o){return o.status==="Pending"}),function(o){return o.total}),
     nocost:paid.filter(function(o){return o.cost===""}).length};
 }
@@ -123,6 +126,7 @@ function chart(){
   for(var i=13;i>=0;i--){var d=new Date();d.setDate(d.getDate()-i);var k=dk(d);days.push(k);m[k]=0}
   D.o.forEach(function(o){if(o.status==="Paid"&&o.day in m)m[o.day]+=o.total-(+o.cost||0)});
   D.e.forEach(function(e){if(e.day in m)m[e.day]-=e.amt});
+  D.w.forEach(function(w){if(w.day in m)m[w.day]-=w.loss});
   var mx=Math.max.apply(null,days.map(function(k){return Math.abs(m[k])}).concat([1])),h="";
   days.forEach(function(k,i){
     var v=m[k],ht=Math.abs(v)/mx*48,y=v>=0?60-ht:60;
@@ -141,7 +145,7 @@ function best(O){
 
 function tabs(){
   var t=$("tabs");t.innerHTML="";
-  ["Hisaab","Orders","Report","Kharche","Bookings"].forEach(function(n){
+  ["Hisaab","Orders","Report","Inventory","Kharche","Bookings"].forEach(function(n){
     var b=document.createElement("button");b.className="tab";b.textContent=n;b.setAttribute("aria-pressed",n===tab);
     b.onclick=function(){tab=n;render()};t.appendChild(b);
   });
@@ -183,16 +187,40 @@ function olist(){
     busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c,pmode:r.querySelector(".pm").value}).then(wait);
   }});
 }
+function inv(c){
+  var h="",low=D.s.filter(function(s){return s.low>0&&s.qty<=s.low});
+  if(low.length)h+='<div class="warn">Kam stock: '+low.map(function(s){return esc(s.name)+' ('+s.qty+' '+esc(s.unit)+')'}).join(", ")+'</div>';
+  h+='<div class="card"><h3>Stock (keemat: '+rs(sum(D.s,function(s){return Math.max(0,s.qty)*s.avg}))+')</h3>';
+  if(!D.s.length)h+='<p class="msg">Abhi koi stock nahi. Neeche se add karein.</p>';
+  D.s.forEach(function(s){h+='<div class="row"><div class="top"><div><b>'+esc(s.name)+'</b><br><small>Avg: '+rs(s.avg)+' / '+esc(s.unit)+' · Last seller: '+esc(s.sup)+'</small></div><div class="amt" style="color:'+(s.low>0&&s.qty<=s.low?'var(--bad)':'inherit')+'">'+s.qty+' '+esc(s.unit)+'</div></div></div>'});
+  h+='</div><datalist id="stl">'+D.s.map(function(s){return '<option value="'+esc(s.name)+'">'}).join("")+'</datalist>';
+  h+='<form class="card" id="sf"><h3>Stock kharidein / add karein</h3><div class="two"><label>Item<input id="sk_i" list="stl" required></label><label>Unit (kg, pcs, L)<input id="sk_u" placeholder="kg"></label></div><div class="two"><label>Quantity<input id="sk_q" type="number" step="any" min="0.001" required></label><label>Total price (Rs.)<input id="sk_t" type="number" step="any" min="0" required></label></div><label>Seller<input id="sk_s" required></label><button class="btn dark" type="submit">Stock add karein</button></form>';
+  var best={};D.p.forEach(function(p){if(!p.unit)return;(best[p.item]=best[p.item]||{})[p.sup]=p.unit});
+  h+='<div class="card"><h3>Seller ke rate</h3>';
+  var ks=Object.keys(best);if(!ks.length)h+='<p class="msg">Abhi koi kharid nahi.</p>';
+  ks.forEach(function(k){var a=Object.keys(best[k]).sort(function(x,y){return best[k][x]-best[k][y]});
+    h+='<div class="row"><b>'+esc(k)+'</b><br><small>'+a.map(function(s,i){return esc(s)+': '+rs(best[k][s])+(i===0&&a.length>1?' (sasta)':'')}).join(" · ")+'</small></div>'});
+  h+='</div><form class="card" id="wf"><h3>Wastage likhein (jala / galti)</h3><div class="two"><label>Item<input id="wa_i" list="stl" required></label><label>Quantity<input id="wa_q" type="number" step="any" min="0.001" required></label></div><label>Wajah<input id="wa_r" placeholder="jaise burnt, chef ki galti"></label><button class="btn dark" type="submit">Wastage save karein</button></form>';
+  var pend=D.o.filter(function(o){return o.status==="Cancelled"&&o.used&&o.used!=="[]"&&!o.wa});
+  h+='<div class="card"><h3>Cancelled orders (stock kata hua)</h3>';
+  if(!pend.length)h+='<p class="msg">Koi nahi.</p>';
+  pend.forEach(function(o){h+='<div class="row"><div class="top"><div><b>'+esc(o.items)+'</b><br><small>#'+esc(o.id)+' · '+esc(o.day)+'</small></div><div><button class="btn dark sm" data-w="waste" data-row="'+esc(o.row)+'">Waste (loss)</button> <button class="btn line sm" style="color:var(--em);border-color:var(--em)" data-w="reuse" data-row="'+esc(o.row)+'">Doosre customer ko diya</button></div></div></div>'});
+  h+='</div>'+range()+'<div class="card"><h3>Wastage loss: '+rs(c.wl)+'</h3>';
+  var W=D.w.filter(function(w){return inR(w.day)});
+  if(!W.length)h+='<p class="msg">Is muddat mein koi wastage nahi.</p>';
+  W.slice().reverse().forEach(function(w){h+='<div class="row"><div class="top"><div><b>'+esc(w.what)+'</b><br><small>'+esc(w.day)+(w.qty!==""?' · '+esc(w.qty):'')+' · '+esc(w.reason)+'</small></div><div class="amt" style="color:'+(w.loss?'var(--bad)':'inherit')+'">'+rs(w.loss)+'</div></div></div>'});
+  return h+'</div>';
+}
 var SLOTS=[["Afternoon (12 PM – 6 PM)",12,18],["Evening (6 PM – 12 AM)",18,24],["Night / Morning (12 AM – 12 PM)",0,12]];
 function report(c){
   var tot=function(o){return o.total},O=c.O.filter(function(o){return o.status!=="Cancelled"}),paid=c.paid;
   var cash=sum(paid.filter(function(o){return o.pm!=="Online"}),tot),online=sum(paid.filter(function(o){return o.pm==="Online"}),tot);
-  var gross=c.sale-c.cost,net=gross-c.ex,canc=c.O.length-O.length;
+  var gross=c.sale-c.cost,net=gross-c.ex-c.wl,canc=c.O.length-O.length;
   var box=function(a){return '<div><small>'+a[0]+'</small><b>'+a[1]+'</b></div>'};
   var h='<button class="btn dark" id="prt" style="margin-bottom:12px">Print report</button>';
   if(c.nocost)h+='<div class="warn">'+c.nocost+' Paid order(s) ki "maal ki cost" nahi likhi, isliye profit asal se zyada dikh sakta hai.</div>';
-  h+='<div class="stats">'+[["Orders",O.length],["Cancelled",canc],["Total sale (Paid)",rs(c.sale)],["Cash",rs(cash)],["Online",rs(online)],["Baqaya (Pending)",rs(c.pend)],["Kharche",rs(c.ex)],["Sale − Kharche",rs(c.sale-c.ex)],["Gross profit",rs(gross)],["Net profit",rs(net)]].map(box).join("")+'</div>';
-  h+='<p class="msg" style="padding:0 0 12px">Gross profit = Sale − maal ki cost. Net profit = Gross profit − kharche. Pay mode na likha ho to Cash maana jata hai.</p>';
+  h+='<div class="stats">'+[["Orders",O.length],["Cancelled",canc],["Total sale (Paid)",rs(c.sale)],["Cash",rs(cash)],["Online",rs(online)],["Baqaya (Pending)",rs(c.pend)],["Kharche",rs(c.ex)],["Wastage loss",rs(c.wl)],["Sale − Kharche",rs(c.sale-c.ex)],["Gross profit",rs(gross)],["Net profit",rs(net)]].map(box).join("")+'</div>';
+  h+='<p class="msg" style="padding:0 0 12px">Gross profit = Sale − maal ki cost. Net profit = Gross profit − kharche − wastage loss. Pay mode na likha ho to Cash maana jata hai.</p>';
   h+='<div class="card"><h3>Slot-wise report</h3>';
   SLOTS.forEach(function(s){
     var L=O.filter(function(o){var hr=new Date(o.t).getHours();return hr>=s[1]&&hr<s[2]});
@@ -214,12 +242,12 @@ function render(){
   if(tab==="Hisaab"){
     h=range()+'<div class="card hero"><div>'+(c.net>=0?"Profit":"Loss")+'</div><div class="v '+(c.net>=0?"ok":"bad")+'">'+rs(c.net)+'</div></div>';
     if(c.nocost)h+='<div class="warn">'+c.nocost+' Paid order(s) ki "maal ki cost" nahi likhi, isliye profit asal se zyada dikh sakta hai. Orders tab mein cost likhein.</div>';
-    h+='<div class="stats"><div><small>Total sale (Paid)</small><b>'+rs(c.sale)+'</b></div><div><small>Maal ki cost</small><b>'+rs(c.cost)+'</b></div><div><small>Kharche</small><b>'+rs(c.ex)+'</b></div><div><small>Baqaya (Pending)</small><b>'+rs(c.pend)+'</b></div><div><small>Paid orders</small><b>'+c.paid.length+'</b></div><div><small>Average order</small><b>'+rs(c.paid.length?c.sale/c.paid.length:0)+'</b></div></div>';
+    h+='<div class="stats"><div><small>Total sale (Paid)</small><b>'+rs(c.sale)+'</b></div><div><small>Maal ki cost</small><b>'+rs(c.cost)+'</b></div><div><small>Kharche</small><b>'+rs(c.ex)+'</b></div><div><small>Wastage loss</small><b>'+rs(c.wl)+'</b></div><div><small>Baqaya (Pending)</small><b>'+rs(c.pend)+'</b></div><div><small>Paid orders</small><b>'+c.paid.length+'</b></div><div><small>Average order</small><b>'+rs(c.paid.length?c.sale/c.paid.length:0)+'</b></div></div>';
     h+='<div class="card"><h3>Pichle 14 din: roz ka profit / loss</h3>'+chart()+'</div><div class="card"><h3>Sabse zyada bikne wale items</h3>'+best(c.O)+'</div>';
-    h+='<p class="msg">Profit = Paid sale − maal ki cost − kharche.</p>';
+    h+='<p class="msg">Profit = Paid sale − maal ki cost − kharche − wastage loss.</p>';
   }else if(tab==="Orders"){
     h=range()+'<label class="srch">Naam ya mobile number se dhoondhein<input id="sq" type="search" placeholder="jaise Salman ya 97568" value="'+esc(q)+'" autocomplete="off"></label><div id="ol"></div>';
-  }else if(tab==="Report"){h=range()+report(c);}else if(tab==="Kharche"){
+  }else if(tab==="Report"){h=range()+report(c);}else if(tab==="Inventory"){h=inv(c);}else if(tab==="Kharche"){
     h=range()+'<form class="card" id="ef"><h3>Kharcha likhein</h3><div class="two"><label>Tareekh<input type="date" id="ed" required value="'+T+'"></label><label>Qisam<select id="ec"><option>Rent</option><option>Bijli/Gas</option><option>Salary</option><option>Samaan</option><option>Marammat</option><option>Other</option></select></label></div><div class="two"><label>Raqam (Rs.)<input id="ea" type="number" min="1" required inputmode="numeric"></label><label>Note<input id="en" placeholder="optional"></label></div><button class="btn dark" type="submit">Kharcha save karein</button></form>';
     h+='<div class="card"><h3>Kharche: '+rs(c.ex)+'</h3>';
     if(!c.E.length)h+='<p class="msg">Is muddat mein koi kharcha nahi.</p>';
@@ -252,6 +280,9 @@ function render(){
     if(confirm("Ye kharcha hatana hai?")){busy(b);post({type:"admin_expense_del",row:b.dataset.del}).then(wait)}
   }});
   v.querySelectorAll("[data-cash]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_cash",rows:JSON.parse(b.dataset.cash)}).then(wait)}});
+  var sf=$("sf");if(sf)sf.onsubmit=function(e){e.preventDefault();busy(sf.querySelector("button"));post({type:"admin_stock_add",item:$("sk_i").value,unit:$("sk_u").value,qty:$("sk_q").value,total:$("sk_t").value,supplier:$("sk_s").value}).then(wait)};
+  var wf=$("wf");if(wf)wf.onsubmit=function(e){e.preventDefault();busy(wf.querySelector("button"));post({type:"admin_waste_raw",item:$("wa_i").value,qty:$("wa_q").value,reason:$("wa_r").value}).then(wait)};
+  v.querySelectorAll("[data-w]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_waste_order",row:b.dataset.row,mode:b.dataset.w}).then(wait)}});
   var pr=$("prt");if(pr)pr.onclick=function(){window.print()};
   var ef=$("ef");if(ef)ef.onsubmit=function(e){
     e.preventDefault();busy(ef.querySelector("button"));
