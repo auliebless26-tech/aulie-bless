@@ -42,25 +42,31 @@ select,input{font:inherit;padding:8px 10px;border:1px solid #b9c4ba;border-radiu
 #login{max-width:360px;margin:50px auto;background:#fff;border:1px solid #d5ddd3;border-radius:10px;padding:18px}
 #login form{display:grid;gap:10px}
 a{color:var(--em)}
+.ins{background:#fff0c2;border:1px solid var(--gold);border-radius:6px;padding:6px 8px;margin:6px 0;font-weight:600}
+.tl{margin:6px 0}.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#pa{display:none}
+@media print{body>*:not(#pa){display:none!important}#pa{display:block;font:14px/1.4 monospace;width:72mm}#pa .big{font-size:18px;font-weight:700;margin:4px 0}#pa h2{font-size:20px}}
+@page{margin:3mm}
 </style>
 </head>
 <body>
 <header><div class="wrap"><h1>Aulie Bless · Orders</h1><div id="hb" hidden><button class="btn line" id="tst">🔔 Test</button> <button class="btn line" id="rf">Refresh</button> <button class="btn line" id="lo">Logout</button></div></div></header>
 <div class="wrap">
-<div id="login"><form id="lf"><h3>Staff login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Orders kholein</button><div class="msg" id="lm" style="padding:0"></div></form></div>
+<div id="login"><form id="lf"><h3>Staff login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Open orders</button><div class="msg" id="lm" style="padding:0"></div></form></div>
 <div id="app" hidden>
-<div id="ws" class="msg" style="padding:10px 0 0;font-size:13px">Phone ko charging par rakhein aur ye page khula chhodein. 🔔 Test dabakar aawaz check kar lein.</div>
-<button class="btn stop" id="stop" hidden>🔕 Aawaz band karein</button>
+<div id="ws" class="msg" style="padding:10px 0 0;font-size:13px">Keep the phone on charge and leave this page open. Tap 🔔 Test to check the sound.</div>
+<button class="btn stop" id="stop" hidden>🔕 Stop alarm</button>
 <div class="tabs" id="tabs"></div>
 <div id="st" class="msg" style="padding:0 0 6px"></div>
 <div id="nb" class="nb" hidden role="status"></div>
 <div id="view"></div>
 </div>
 </div>
+<div id="pa"></div>
 <script>
 var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
-var O=[],B=[],tab="Chal rahe",key="",seen=null,unread=0;
-var KS=["New","Preparing","Ready","Delivered"],KL={New:"Naya",Preparing:"Ban raha",Ready:"Tayyar",Delivered:"Diya gaya"};
+var O=[],B=[],tab="Active",key="",seen=null,unread=0;
+var KS=["New","Preparing","Ready","Out","Delivered"],KL={New:"New",Preparing:"Preparing",Ready:"Ready",Out:"On the way",Delivered:"Delivered"};
 var $=function(i){return document.getElementById(i)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function sm(u){u=String(u||"");return /^https:\/\/(www\.)?google\.com\/maps/.test(u)?u:""}
@@ -91,7 +97,7 @@ $("stop").onclick=stopRing;
 function wake(){
   if(!("wakeLock" in navigator)||wl||!key)return;
   navigator.wakeLock.request("screen").then(function(l){
-    wl=l;$("ws").textContent="Screen on rahegi aur aawaz chalti rahegi. Page band na karein.";
+    wl=l;$("ws").textContent="Screen will stay on and the alarm will keep working. Do not close this page.";
     l.addEventListener("release",function(){wl=null});
   }).catch(function(){});
 }
@@ -99,13 +105,13 @@ function wake(){
 
 function post(o){o.key=key;return fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){})}
 function load(auto){
-  if(!auto)$("st").textContent="Load ho raha hai…";
+  if(!auto)$("st").textContent="Loading…";
   fetch(SCRIPT_URL+"?action=staff&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
-    if(j.error){logout("Password galat hai.");return}
-    O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New"}});
+    if(j.error){logout("Wrong password.");return}
+    O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New",ts:[v[12],v[13],v[14],v[15]],ins:v[16]||"",cp:v[17]||"",disc:+v[18]||0,ln:v[20]||""}});
     B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
     alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
-  }).catch(function(){$("st").textContent=auto?"Auto-refresh abhi nahi chala, internet check karein.":"Data nahi aaya. Internet check karein."});
+  }).catch(function(){$("st").textContent=auto?"Auto-refresh failed, check your internet.":"Could not load data. Check your internet."});
 }
 function logout(m){key="";stopRing();sessionStorage.removeItem("sk");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";if(wl){try{wl.release()}catch(e){}wl=null}}
 $("lf").onsubmit=function(e){
@@ -121,46 +127,75 @@ function alertNew(){
   seen={};O.forEach(function(o){seen[o.id]=1});
   if(!f.length)return;
   unread+=f.length;var o=f[f.length-1];
-  $("nb").hidden=false;$("nb").textContent="🔔 "+unread+" naya order: #"+o.id+" · "+o.name+" (dekhne ke liye dabayein)";
-  document.title="("+unread+") Naya order – Aulie Bless";
+  $("nb").hidden=false;$("nb").textContent="🔔 "+unread+" new order: #"+o.id+" · "+o.name+" (tap to view)";
+  document.title="("+unread+") New order – Aulie Bless";
   ring();
-  try{if("Notification" in window&&Notification.permission==="granted")new Notification("Naya order #"+o.id,{body:o.name+" · "+rs(o.total),requireInteraction:true})}catch(e){}
+  try{if("Notification" in window&&Notification.permission==="granted")new Notification("New order #"+o.id,{body:o.name+" · "+rs(o.total),requireInteraction:true})}catch(e){}
 }
-$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Chal rahe";render()};
+$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Active";render()};
 
 function save(o){post({type:"staff_order",row:o.row,kitchen:o.k,status:o.pay}).then(function(){setTimeout(function(){load(true)},1500)})}
+function mins(a,b){var x=new Date(a),y=new Date(b);return a&&b&&!isNaN(x)&&!isNaN(y)?Math.max(0,Math.round((y-x)/60000)):null}
+function tcol(m){return m<=30?"#16794f":m<=40?"#d4b000":m<=50?"#e07b00":"#b83227"}
+function timeline(o){
+  if(o.pay==="Cancelled")return "";
+  var t=o.ts,done=t[3];
+  if(o.k==="Delivered"&&!done)return "";
+  var m=mins(o.t,done||new Date());if(m===null)return "";
+  var p=[],a=mins(o.t,t[0]),r=mins(t[0],t[1]),d=mins(t[1],t[3]);
+  if(a!==null)p.push("Accept "+a+"m");if(r!==null)p.push("Prepare "+r+"m");if(d!==null)p.push("Delivery "+d+"m");
+  return '<div class="tl"><span class="dot" style="background:'+tcol(m)+'"></span><b>'+m+' min'+(done?' total':' so far')+'</b> <small>'+p.join(" · ")+'</small></div>';
+}
+var SHOP={name:"Aulie Bless",line:"Nagpur",phone:"+91 91126 26757"};
+function printDoc(o,kind){
+  var L=[];try{L=JSON.parse(o.ln||"[]")}catch(e){}
+  if(!Array.isArray(L))L=[];
+  var h='<h2>'+esc(SHOP.name)+'</h2>';
+  var rows=L.length?L:o.items.split(", ").map(function(x){var m=/^(\d+) x (.+)$/.exec(x);return m?{q:+m[1],n:m[2],p:null}:{q:1,n:x,p:null}});
+  if(kind==="kot"){
+    h+='<p><b>KOT</b> #'+esc(o.id)+'<br>'+esc(o.mode)+' · '+esc(tm(o.t))+(o.note?'<br>'+esc(o.note):'')+'</p><hr>';
+    h+=rows.map(function(x){return '<p class="big">'+(+x.q||0)+' x '+esc(x.n)+'</p>'}).join("");
+    if(o.ins)h+='<hr><p class="big">** '+esc(o.ins)+' **</p>';
+  }else{
+    h+='<p>'+esc(SHOP.line)+'<br>'+esc(SHOP.phone)+'<br>Bill #'+esc(o.id)+'<br>'+esc(tm(o.t))+'<br>'+esc(o.name)+'</p><hr>';
+    h+=rows.map(function(x){var q=+x.q||0;return '<p>'+q+' x '+esc(x.n)+(x.p!=null?'<br>&nbsp;&nbsp;&nbsp;'+rs(q*(+x.p||0)):'')+'</p>'}).join("");
+    h+='<hr>'+(o.disc?'<p>Discount ('+esc(o.cp)+'): − '+rs(o.disc)+'</p>':'')+'<p class="big">Total: '+rs(o.total)+'</p><p>Thank you! Visit again.</p>';
+  }
+  $("pa").innerHTML=h;window.print();
+}
 function render(){
   var t=$("tabs");t.innerHTML="";
-  ["Chal rahe","Mukammal","Bookings"].forEach(function(n){
+  ["Active","Completed","Bookings"].forEach(function(n){
     var b=document.createElement("button");b.className="tab";b.textContent=n;b.setAttribute("aria-pressed",n===tab);b.onclick=function(){tab=n;render()};t.appendChild(b);
   });
   var v=$("view"),h="";
   if(tab==="Bookings"){
     h='<h3 style="margin:8px 0">Table bookings</h3>';
-    if(!B.length)h+='<p class="msg">Abhi koi booking nahi.</p>';
+    if(!B.length)h+='<p class="msg">No bookings yet.</p>';
     B.slice().reverse().forEach(function(b){
       var d=new Date(b.date),dd=isNaN(d)?esc(b.date):d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
       var tt=typeof b.time==="string"&&/^\d/.test(b.time)?b.time:(b.time?new Date(b.time).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}):"");
-      h+='<div class="card"><b>'+esc(b.name)+'</b> · '+esc(b.people)+' log<br><small>'+dd+' · '+esc(tt)+' · <a href="tel:'+esc(b.phone)+'">'+esc(b.phone)+'</a></small></div>';
+      h+='<div class="card"><b>'+esc(b.name)+'</b> · '+esc(b.people)+' guests<br><small>'+dd+' · '+esc(tt)+' · <a href="tel:'+esc(b.phone)+'">'+esc(b.phone)+'</a></small></div>';
     });
   }else{
-    var act=tab==="Chal rahe",L=O.filter(function(o){var done=o.k==="Delivered"||o.pay==="Cancelled";return act?!done:done});
+    var act=tab==="Active",L=O.filter(function(o){var done=o.k==="Delivered"||o.pay==="Cancelled";return act?!done:done});
     L.sort(function(a,b){return act?(String(a.t)<String(b.t)?-1:1):(String(a.t)<String(b.t)?1:-1)});
-    if(!L.length)h='<p class="msg">'+(act?"Abhi koi order pending nahi.":"Abhi koi mukammal order nahi.")+'</p>';
+    if(!L.length)h='<p class="msg">'+(act?"No active orders.":"No completed orders.")+'</p>';
     L.forEach(function(o){
       var mp=sm(o.loc);
       h+='<div class="card '+(o.pay==="Cancelled"?"Cancelled":esc(o.k))+'" data-row="'+esc(o.row)+'"><div class="top"><div><small>#'+esc(o.id)+' · '+tm(o.t)+' · <span class="chip">'+esc(o.mode)+'</span></small></div><div class="amt">'+rs(o.total)+'</div></div>'
-       +'<div class="items">'+o.items.split(", ").map(function(x){return esc(x)}).join("<br>")+'</div>'
+       +'<div class="items">'+o.items.split(", ").map(function(x){return esc(x)}).join("<br>")+'</div>'+(o.ins?'<div class="ins">📝 '+esc(o.ins)+'</div>':'')+(o.cp||o.disc?'<small>Coupon: '+esc(o.cp)+(o.disc?' · Discount '+rs(o.disc):'')+'</small><br>':'')+timeline(o)
        +'<div>'+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'
-       +(o.note||mp?'<small>'+esc(o.note)+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Map kholein</a>':'')+'</small>':'')
-       +'<div class="ks">'+KS.map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
-       +'<div class="pay">Paisa: <select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option value="'+s+'"'+(s===o.pay?' selected':'')+'>'+({Pending:"Baqaya",Paid:"Mil gaya",Cancelled:"Cancel"})[s]+'</option>'}).join("")+'</select></div></div>';
+       +(o.note||mp?'<small>'+esc(o.note)+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Open map</a>':'')+'</small>':'')
+       +'<div class="ks" style="grid-template-columns:repeat('+(o.mode==="Delivery"?5:4)+',1fr)">'+(o.mode==="Delivery"?KS:KS.filter(function(x){return x!=="Out"})).map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
+       +'<div class="pay"><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="kot">KOT</button><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="bill">Bill</button> Payment: <select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option value="'+s+'"'+(s===o.pay?' selected':'')+'>'+({Pending:"Unpaid",Paid:"Paid",Cancelled:"Cancelled"})[s]+'</option>'}).join("")+'</select></div></div>';
     });
   }
   v.innerHTML=h;
   function find(el){var r=+el.closest(".card").dataset.row;return O.filter(function(o){return o.row===r})[0]}
   v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);o.k=b.dataset.k;render();save(o)}});
   v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s);o.pay=s.value;render();save(o)}});
+  v.querySelectorAll("[data-p]").forEach(function(b){b.onclick=function(){printDoc(find(b),b.dataset.p)}});
 }
 function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!(a&&a.tagName==="SELECT"))load(true)}
 setInterval(auto,5000);
