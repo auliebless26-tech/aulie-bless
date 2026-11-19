@@ -62,6 +62,7 @@ a{color:var(--em)}
 <div id="view"></div>
 </div>
 </div>
+<datalist id="boys"></datalist>
 <div id="pa"></div>
 <script>
 var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
@@ -108,7 +109,7 @@ function load(auto){
   if(!auto)$("st").textContent="Loading…";
   fetch(SCRIPT_URL+"?action=staff&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
     if(j.error){logout("Wrong password.");return}
-    O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New",ts:[v[12],v[13],v[14],v[15]],ins:v[16]||"",cp:v[17]||"",disc:+v[18]||0,ln:v[20]||""}});
+    O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New",ts:[v[12],v[13],v[14],v[15]],ins:v[16]||"",cp:v[17]||"",disc:+v[18]||0,ln:v[20]||"",pm:v[21]||"",boy:String(v[22]||"")}});
     B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
     alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
   }).catch(function(){$("st").textContent=auto?"Auto-refresh failed, check your internet.":"Could not load data. Check your internet."});
@@ -134,7 +135,7 @@ function alertNew(){
 }
 $("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Active";render()};
 
-function save(o){post({type:"staff_order",row:o.row,kitchen:o.k,status:o.pay}).then(function(){setTimeout(function(){load(true)},1500)})}
+function save(o){post({type:"staff_order",row:o.row,kitchen:o.k,status:o.pay,pmode:o.pm,boy:o.boy}).then(function(){setTimeout(function(){load(true)},1500)})}
 function mins(a,b){var x=new Date(a),y=new Date(b);return a&&b&&!isNaN(x)&&!isNaN(y)?Math.max(0,Math.round((y-x)/60000)):null}
 function tcol(m){return m<=30?"#16794f":m<=40?"#d4b000":m<=50?"#e07b00":"#b83227"}
 function timeline(o){
@@ -188,16 +189,18 @@ function render(){
        +'<div>'+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'
        +(o.note||mp?'<small>'+esc(o.note)+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Open map</a>':'')+'</small>':'')
        +'<div class="ks" style="grid-template-columns:repeat('+(o.mode==="Delivery"?5:4)+',1fr)">'+(o.mode==="Delivery"?KS:KS.filter(function(x){return x!=="Out"})).map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
-       +'<div class="pay"><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="kot">KOT</button><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="bill">Bill</button> Payment: <select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option value="'+s+'"'+(s===o.pay?' selected':'')+'>'+({Pending:"Unpaid",Paid:"Paid",Cancelled:"Cancelled"})[s]+'</option>'}).join("")+'</select></div></div>';
+       +(o.mode==="Delivery"?'<div class="pay">Delivery boy: <input class="boy" list="boys" value="'+esc(o.boy)+'" placeholder="Name" maxlength="40" style="flex:1"></div>':'')+'<div class="pay"><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="kot">KOT</button><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="bill">Bill</button> Payment: <select>'+[["Pending","Unpaid"],["PaidCash","Paid – Cash"],["PaidOnline","Paid – Online"],["Cancelled","Cancelled"]].map(function(s){var cur=o.pay==="Paid"?(o.pm==="Online"?"PaidOnline":"PaidCash"):o.pay;return '<option value="'+s[0]+'"'+(s[0]===cur?' selected':'')+'>'+s[1]+'</option>'}).join("")+'</select></div></div>';
     });
   }
   v.innerHTML=h;
   function find(el){var r=+el.closest(".card").dataset.row;return O.filter(function(o){return o.row===r})[0]}
   v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);o.k=b.dataset.k;render();save(o)}});
-  v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s);o.pay=s.value;render();save(o)}});
+  v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s),w=s.value;o.pay=(w==="PaidCash"||w==="PaidOnline")?"Paid":w;if(w==="PaidCash")o.pm="Cash";if(w==="PaidOnline")o.pm="Online";render();save(o)}});
+  v.querySelectorAll(".boy").forEach(function(i){i.onchange=function(){var o=find(i);o.boy=i.value.trim();save(o)}});
+  var bn={};O.forEach(function(o){if(o.boy)bn[o.boy]=1});$("boys").innerHTML=Object.keys(bn).map(function(n){return '<option value="'+esc(n)+'">'}).join("");
   v.querySelectorAll("[data-p]").forEach(function(b){b.onclick=function(){printDoc(find(b),b.dataset.p)}});
 }
-function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!(a&&a.tagName==="SELECT"))load(true)}
+function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!(a&&(a.tagName==="SELECT"||a.tagName==="INPUT")))load(true)}
 setInterval(auto,5000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden){auto();wake()}});
 key=sessionStorage.getItem("sk")||"";if(key)load();
