@@ -53,6 +53,7 @@ input,select{font:inherit;padding:9px 10px;border:1px solid #b9c4ba;border-radiu
 #login{max-width:380px;margin:60px auto}
 a{color:var(--em)}
 @media (max-width:480px){.two{grid-template-columns:1fr}}
+@media print{header,.tabs,#nb,#prt,.btn{display:none!important}}
 </style>
 </head>
 <body>
@@ -99,7 +100,7 @@ function load(auto){
   if(!auto)$("st").textContent="Load ho raha hai…";
   fetch(SCRIPT_URL+"?action=data&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
     if(j.error){sessionStorage.removeItem("ak");logout("Password galat hai.");return}
-    D.o=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,status:v[8]||"Pending",cost:v[9]===""?"":+v[9],loc:v[10]||"",kitchen:v[11]||"New",day:dk(v[1])}});
+    D.o=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,status:v[8]||"Pending",cost:v[9]===""?"":+v[9],loc:v[10]||"",kitchen:v[11]||"New",day:dk(v[1]),pm:v[21]||"",boy:String(v[22]||""),cashOk:v[23]==="YES"}});
     D.e=j.expenses.map(function(r){var v=r.v;return {row:r.row,day:dk(v[0]),cat:v[1],amt:+v[2]||0,note:v[3]||""}});
     D.b=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5],t:v[0]}});
     newOrders();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
@@ -140,7 +141,7 @@ function best(O){
 
 function tabs(){
   var t=$("tabs");t.innerHTML="";
-  ["Hisaab","Orders","Kharche","Bookings"].forEach(function(n){
+  ["Hisaab","Orders","Report","Kharche","Bookings"].forEach(function(n){
     var b=document.createElement("button");b.className="tab";b.textContent=n;b.setAttribute("aria-pressed",n===tab);
     b.onclick=function(){tab=n;render()};t.appendChild(b);
   });
@@ -157,7 +158,7 @@ function orderRows(L){
   L.forEach(function(o){
     var mp=sm(o.loc);
     h+='<div class="row" data-row="'+esc(o.row)+'"><div class="top"><div><b>'+esc(o.items)+'</b><br><small>#'+esc(o.id)+' · '+esc(o.day)+' · '+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+esc(o.mode)+' · Kitchen: '+esc(o.kitchen)+(o.note?' – '+esc(o.note):'')+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Map</a>':'')+'</small></div><div><div class="amt">'+rs(o.total)+'</div><span class="chip '+esc(o.status)+'">'+esc(o.status)+'</span></div></div>'
-     +'<div class="edit"><select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>'}).join("")+'</select><input type="number" min="0" inputmode="numeric" placeholder="Maal ki cost" value="'+(o.cost===""?"":esc(o.cost))+'"><button class="btn dark sm" data-save="1">Save</button></div></div>';
+     +'<div class="edit"><select>'+["Pending","Paid","Cancelled"].map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>'}).join("")+'</select><select class="pm"><option'+(o.pm==="Online"?'':' selected')+'>Cash</option><option'+(o.pm==="Online"?' selected':'')+'>Online</option></select><input type="number" min="0" inputmode="numeric" placeholder="Maal ki cost" value="'+(o.cost===""?"":esc(o.cost))+'"><button class="btn dark sm" data-save="1">Save</button></div></div>';
   });
   return h;
 }
@@ -179,8 +180,34 @@ function olist(){
   box.innerHTML=h;
   box.querySelectorAll("[data-save]").forEach(function(b){b.onclick=function(){
     var r=b.closest(".row"),s=r.querySelector("select").value,c=r.querySelector("input").value;
-    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c}).then(wait);
+    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c,pmode:r.querySelector(".pm").value}).then(wait);
   }});
+}
+var SLOTS=[["Afternoon (12 PM – 6 PM)",12,18],["Evening (6 PM – 12 AM)",18,24],["Night / Morning (12 AM – 12 PM)",0,12]];
+function report(c){
+  var tot=function(o){return o.total},O=c.O.filter(function(o){return o.status!=="Cancelled"}),paid=c.paid;
+  var cash=sum(paid.filter(function(o){return o.pm!=="Online"}),tot),online=sum(paid.filter(function(o){return o.pm==="Online"}),tot);
+  var gross=c.sale-c.cost,net=gross-c.ex,canc=c.O.length-O.length;
+  var box=function(a){return '<div><small>'+a[0]+'</small><b>'+a[1]+'</b></div>'};
+  var h='<button class="btn dark" id="prt" style="margin-bottom:12px">Print report</button>';
+  if(c.nocost)h+='<div class="warn">'+c.nocost+' Paid order(s) ki "maal ki cost" nahi likhi, isliye profit asal se zyada dikh sakta hai.</div>';
+  h+='<div class="stats">'+[["Orders",O.length],["Cancelled",canc],["Total sale (Paid)",rs(c.sale)],["Cash",rs(cash)],["Online",rs(online)],["Baqaya (Pending)",rs(c.pend)],["Kharche",rs(c.ex)],["Sale − Kharche",rs(c.sale-c.ex)],["Gross profit",rs(gross)],["Net profit",rs(net)]].map(box).join("")+'</div>';
+  h+='<p class="msg" style="padding:0 0 12px">Gross profit = Sale − maal ki cost. Net profit = Gross profit − kharche. Pay mode na likha ho to Cash maana jata hai.</p>';
+  h+='<div class="card"><h3>Slot-wise report</h3>';
+  SLOTS.forEach(function(s){
+    var L=O.filter(function(o){var hr=new Date(o.t).getHours();return hr>=s[1]&&hr<s[2]});
+    h+='<div class="row"><b>'+s[0]+'</b><br><small>Orders: '+L.length+' · Sales: '+rs(sum(L,tot))+' · Paid: '+rs(sum(L.filter(function(o){return o.status==="Paid"}),tot))+'</small></div>';
+  });
+  h+='</div><div class="card"><h3>Delivery boy cash</h3>';
+  var by={};
+  paid.filter(function(o){return o.mode==="Delivery"&&o.pm!=="Online"}).forEach(function(o){var b=o.boy.trim()||"(naam nahi likha)";(by[b]=by[b]||[]).push(o)});
+  var ks=Object.keys(by);
+  if(!ks.length)h+='<p class="msg">Is muddat mein koi cash delivery nahi.</p>';
+  ks.forEach(function(b){
+    var L=by[b],all=sum(L,tot),got=sum(L.filter(function(o){return o.cashOk}),tot),open=L.filter(function(o){return !o.cashOk});
+    h+='<div class="row"><div class="top"><div><b>'+esc(b)+'</b><br><small>'+L.length+' order · Cash: '+rs(all)+' · Mila: '+rs(got)+' · Baqaya: '+rs(all-got)+'</small></div>'+(open.length?'<button class="btn dark sm" data-cash="'+esc(JSON.stringify(open.map(function(o){return o.row})))+'">Cash mila</button>':'<span class="chip Paid">Hisaab saaf</span>')+'</div></div>';
+  });
+  return h+'</div>';
 }
 function render(){
   tabs();var v=$("view"),c=calc(),h="";
@@ -192,7 +219,7 @@ function render(){
     h+='<p class="msg">Profit = Paid sale − maal ki cost − kharche.</p>';
   }else if(tab==="Orders"){
     h=range()+'<label class="srch">Naam ya mobile number se dhoondhein<input id="sq" type="search" placeholder="jaise Salman ya 97568" value="'+esc(q)+'" autocomplete="off"></label><div id="ol"></div>';
-  }else if(tab==="Kharche"){
+  }else if(tab==="Report"){h=range()+report(c);}else if(tab==="Kharche"){
     h=range()+'<form class="card" id="ef"><h3>Kharcha likhein</h3><div class="two"><label>Tareekh<input type="date" id="ed" required value="'+T+'"></label><label>Qisam<select id="ec"><option>Rent</option><option>Bijli/Gas</option><option>Salary</option><option>Samaan</option><option>Marammat</option><option>Other</option></select></label></div><div class="two"><label>Raqam (Rs.)<input id="ea" type="number" min="1" required inputmode="numeric"></label><label>Note<input id="en" placeholder="optional"></label></div><button class="btn dark" type="submit">Kharcha save karein</button></form>';
     h+='<div class="card"><h3>Kharche: '+rs(c.ex)+'</h3>';
     if(!c.E.length)h+='<p class="msg">Is muddat mein koi kharcha nahi.</p>';
@@ -224,6 +251,8 @@ function render(){
   v.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){
     if(confirm("Ye kharcha hatana hai?")){busy(b);post({type:"admin_expense_del",row:b.dataset.del}).then(wait)}
   }});
+  v.querySelectorAll("[data-cash]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_cash",rows:JSON.parse(b.dataset.cash)}).then(wait)}});
+  var pr=$("prt");if(pr)pr.onclick=function(){window.print()};
   var ef=$("ef");if(ef)ef.onsubmit=function(e){
     e.preventDefault();busy(ef.querySelector("button"));
     post({type:"admin_expense",date:$("ed").value,cat:$("ec").value,amount:$("ea").value,note:$("en").value}).then(wait);
