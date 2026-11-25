@@ -54,6 +54,8 @@ input,select{font:inherit;padding:9px 10px;border:1px solid #b9c4ba;border-radiu
 a{color:var(--em)}
 @media (max-width:480px){.two{grid-template-columns:1fr}}
 @media print{header,.tabs,#nb,#prt,.btn{display:none!important}}
+[hidden]{display:none!important}
+@media(max-width:768px){header{position:sticky;top:0;z-index:5} .wrap{padding:0 12px}.tabs{position:sticky;top:53px;background:var(--paper);z-index:4;padding:8px 0;margin:8px 0}.tab,.btn{min-height:44px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats b{font-size:19px}.card{padding:12px}.edit input,.edit select{flex:1;min-width:100px}.top{flex-wrap:wrap}input,select{font-size:16px}.bar span:first-child{min-width:90px;overflow-wrap:anywhere}.bar i{max-width:35%}header h1{font-size:20px}}
 </style>
 </head>
 <body>
@@ -90,16 +92,20 @@ function inR(k){
 }
 function sum(a,f){return a.reduce(function(s,x){return s+f(x)},0)}
 
-function post(o){
-  o.key=key;
-  return fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){});
+var generation=0,loading=false,saving=false;
+async function post(o){
+  if(!o.key && key)o.key=key;
+  var r=await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)});
+  if(!r.ok)throw Error("Server unavailable");var t=await r.text();if(t==="OK")return {ok:true};var j;try{j=JSON.parse(t)}catch(e){throw Error(t||"No confirmation")};if(!j.ok)throw Error(j.error||"Request failed");return j;
 }
 var seen=null,unread=0;
 function load(auto){
-  if(!SCRIPT_URL){$("lm").textContent="SCRIPT_URL set nahi hai.";return}
+  if(!key||loading||saving)return Promise.resolve();loading=true;var g=generation;T=dk(new Date());
+  if(!SCRIPT_URL){$("lm").textContent="SCRIPT_URL set nahi hai.";loading=false;return Promise.resolve()}
   if(!auto)$("st").textContent="Load ho raha hai…";
-  fetch(SCRIPT_URL+"?action=data&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
-    if(j.error){sessionStorage.removeItem("ak");logout("Password galat hai.");return}
+  return fetch(SCRIPT_URL+"?action=data&key="+encodeURIComponent(key),{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+    if(g!==generation)return;
+    if(j.error){sessionStorage.removeItem("ak");logout("Session expired. Please sign in again.");return}
     D.o=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,status:v[8]||"Pending",cost:v[9]===""?"":+v[9],loc:v[10]||"",kitchen:v[11]||"New",day:dk(v[1]),pm:v[21]||"",boy:String(v[22]||""),cashOk:v[23]==="YES",used:String(v[24]||""),wa:String(v[25]||"")}});
     D.e=j.expenses.map(function(r){var v=r.v;return {row:r.row,day:dk(v[0]),cat:v[1],amt:+v[2]||0,note:v[3]||""}});
     D.b=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5],t:v[0]}});
@@ -107,10 +113,10 @@ function load(auto){
     D.p=(j.purchases||[]).map(function(r){var v=r.v;return {day:dk(v[0]),item:String(v[1]),sup:String(v[2]),unit:+v[5]||0}});
     D.w=(j.waste||[]).map(function(r){var v=r.v;return {day:dk(v[0]),what:String(v[1]),qty:v[2],reason:String(v[3]||""),loss:+v[4]||0,type:String(v[5])}});
     newOrders();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
-  }).catch(function(){$("st").textContent=auto?"Auto-refresh abhi nahi chala, internet check karein.":"Data nahi aaya. Internet ya SCRIPT_URL check karein.";});
+  }).catch(function(){if(g!==generation)return;$("st").textContent="Data nahi aaya. Internet ya deployment check karein.";$("lm").textContent=$("st").textContent;}).finally(function(){loading=false;});
 }
-function logout(m){key="";sessionStorage.removeItem("ak");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||""}
-$("lf").onsubmit=function(e){e.preventDefault();key=$("pw").value;sessionStorage.setItem("ak",key);load()};
+function logout(m){var old=key;generation++;key="";sessionStorage.removeItem("ak");D={o:[],e:[],b:[],s:[],p:[],w:[]};seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Hisaab Portal";if(old)post({type:"v2_logout",token:old}).catch(function(){});}
+$("lf").onsubmit=async function(e){e.preventDefault();var b=this.querySelector("button"),g=++generation;b.disabled=true;$("lm").textContent="Signing in…";try{var j=await post({type:"v2_login",role:"admin",key:$("pw").value});if(g!==generation)return;key=j.token;sessionStorage.setItem("ak",key);$("pw").value="";$("lm").textContent="";await load();}catch(e){if(g===generation)$("lm").textContent=e.message;}finally{b.disabled=false;}};
 $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
 
 function calc(){
@@ -135,7 +141,7 @@ function chart(){
   return '<svg viewBox="0 0 336 130" width="100%" role="img" aria-label="Pichle 14 din ka profit ya loss"><line x1="0" x2="336" y1="60" y2="60" stroke="#c9a24b"/>'+h+'</svg>';
 }
 function best(O){
-  var c={};
+  var c=Object.create(null);
   O.forEach(function(o){if(o.status==="Cancelled")return;o.items.split(", ").forEach(function(s){var m=/^(\d+) x (.+)$/.exec(s);if(m)c[m[2]]=(c[m[2]]||0)+ +m[1]})});
   var a=Object.keys(c).map(function(k){return [k,c[k]]}).sort(function(x,y){return y[1]-x[1]}).slice(0,6);
   if(!a.length)return '<p class="msg">Abhi koi data nahi.</p>';
@@ -184,7 +190,7 @@ function olist(){
   box.innerHTML=h;
   box.querySelectorAll("[data-save]").forEach(function(b){b.onclick=function(){
     var r=b.closest(".row"),s=r.querySelector("select").value,c=r.querySelector("input").value;
-    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c,pmode:r.querySelector(".pm").value}).then(wait);
+    busy(b);post({type:"admin_order",row:r.dataset.row,status:s,cost:c,pmode:r.querySelector(".pm").value}).then(wait).catch(saveError);
   }});
 }
 function inv(c){
@@ -195,7 +201,7 @@ function inv(c){
   D.s.forEach(function(s){h+='<div class="row"><div class="top"><div><b>'+esc(s.name)+'</b><br><small>Avg: '+rs(s.avg)+' / '+esc(s.unit)+' · Last seller: '+esc(s.sup)+'</small></div><div class="amt" style="color:'+(s.low>0&&s.qty<=s.low?'var(--bad)':'inherit')+'">'+s.qty+' '+esc(s.unit)+'</div></div></div>'});
   h+='</div><datalist id="stl">'+D.s.map(function(s){return '<option value="'+esc(s.name)+'">'}).join("")+'</datalist>';
   h+='<form class="card" id="sf"><h3>Stock kharidein / add karein</h3><div class="two"><label>Item<input id="sk_i" list="stl" required></label><label>Unit (kg, pcs, L)<input id="sk_u" placeholder="kg"></label></div><div class="two"><label>Quantity<input id="sk_q" type="number" step="any" min="0.001" required></label><label>Total price (Rs.)<input id="sk_t" type="number" step="any" min="0" required></label></div><label>Seller<input id="sk_s" required></label><button class="btn dark" type="submit">Stock add karein</button></form>';
-  var best={};D.p.forEach(function(p){if(!p.unit)return;(best[p.item]=best[p.item]||{})[p.sup]=p.unit});
+  var best=Object.create(null);D.p.forEach(function(p){if(!p.unit)return;(best[p.item]=best[p.item]||Object.create(null))[p.sup]=p.unit});
   h+='<div class="card"><h3>Seller ke rate</h3>';
   var ks=Object.keys(best);if(!ks.length)h+='<p class="msg">Abhi koi kharid nahi.</p>';
   ks.forEach(function(k){var a=Object.keys(best[k]).sort(function(x,y){return best[k][x]-best[k][y]});
@@ -214,21 +220,21 @@ function inv(c){
 var SLOTS=[["Afternoon (12 PM – 6 PM)",12,18],["Evening (6 PM – 12 AM)",18,24],["Night / Morning (12 AM – 12 PM)",0,12]];
 function report(c){
   var tot=function(o){return o.total},O=c.O.filter(function(o){return o.status!=="Cancelled"}),paid=c.paid;
-  var cash=sum(paid.filter(function(o){return o.pm!=="Online"}),tot),online=sum(paid.filter(function(o){return o.pm==="Online"}),tot);
+  var cash=sum(paid.filter(function(o){return o.pm==="Cash"}),tot),online=sum(paid.filter(function(o){return o.pm==="Online"}),tot);
   var gross=c.sale-c.cost,net=gross-c.ex-c.wl,canc=c.O.length-O.length;
   var box=function(a){return '<div><small>'+a[0]+'</small><b>'+a[1]+'</b></div>'};
   var h='<button class="btn dark" id="prt" style="margin-bottom:12px">Print report</button>';
   if(c.nocost)h+='<div class="warn">'+c.nocost+' Paid order(s) ki "maal ki cost" nahi likhi, isliye profit asal se zyada dikh sakta hai.</div>';
-  h+='<div class="stats">'+[["Orders",O.length],["Cancelled",canc],["Total sale (Paid)",rs(c.sale)],["Cash",rs(cash)],["Online",rs(online)],["Baqaya (Pending)",rs(c.pend)],["Kharche",rs(c.ex)],["Wastage loss",rs(c.wl)],["Sale − Kharche",rs(c.sale-c.ex)],["Gross profit",rs(gross)],["Net profit",rs(net)]].map(box).join("")+'</div>';
-  h+='<p class="msg" style="padding:0 0 12px">Gross profit = Sale − maal ki cost. Net profit = Gross profit − kharche − wastage loss. Pay mode na likha ho to Cash maana jata hai.</p>';
+  h+='<div class="stats">'+[["Orders",O.length],["Cancelled",canc],["Total sale (Paid)",rs(c.sale)],["Cash",rs(cash)],["Online",rs(online)],["Payment mode unknown",rs(c.sale-cash-online)],["Baqaya (Pending)",rs(c.pend)],["Kharche",rs(c.ex)],["Wastage loss",rs(c.wl)],["Sale − Kharche",rs(c.sale-c.ex)],["Gross profit",rs(gross)],["Net profit",rs(net)]].map(box).join("")+'</div>';
+  h+='<p class="msg" style="padding:0 0 12px">Gross profit = Sale − maal ki cost. Net profit = Gross profit − kharche − wastage loss. Pay mode missing ho to Unknown mein dikhaya jata hai.</p>';
   h+='<div class="card"><h3>Slot-wise report</h3>';
   SLOTS.forEach(function(s){
     var L=O.filter(function(o){var hr=new Date(o.t).getHours();return hr>=s[1]&&hr<s[2]});
     h+='<div class="row"><b>'+s[0]+'</b><br><small>Orders: '+L.length+' · Sales: '+rs(sum(L,tot))+' · Paid: '+rs(sum(L.filter(function(o){return o.status==="Paid"}),tot))+'</small></div>';
   });
   h+='</div><div class="card"><h3>Delivery boy cash</h3>';
-  var by={};
-  paid.filter(function(o){return o.mode==="Delivery"&&o.pm!=="Online"}).forEach(function(o){var b=o.boy.trim()||"(naam nahi likha)";(by[b]=by[b]||[]).push(o)});
+  var by=Object.create(null);
+  paid.filter(function(o){return o.mode==="Delivery"&&o.pm==="Cash"}).forEach(function(o){var b=o.boy.trim()||"(naam nahi likha)";(by[b]=by[b]||[]).push(o)});
   var ks=Object.keys(by);
   if(!ks.length)h+='<p class="msg">Is muddat mein koi cash delivery nahi.</p>';
   ks.forEach(function(b){
@@ -277,20 +283,22 @@ function render(){
     $("sq").oninput=function(){q=this.value;olist()};
   }
   v.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){
-    if(confirm("Ye kharcha hatana hai?")){busy(b);post({type:"admin_expense_del",row:b.dataset.del}).then(wait)}
+    if(confirm("Ye kharcha hatana hai?")){busy(b);post({type:"admin_expense_del",row:b.dataset.del}).then(wait).catch(saveError)}
   }});
-  v.querySelectorAll("[data-cash]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_cash",rows:JSON.parse(b.dataset.cash)}).then(wait)}});
-  var sf=$("sf");if(sf)sf.onsubmit=function(e){e.preventDefault();busy(sf.querySelector("button"));post({type:"admin_stock_add",item:$("sk_i").value,unit:$("sk_u").value,qty:$("sk_q").value,total:$("sk_t").value,supplier:$("sk_s").value}).then(wait)};
-  var wf=$("wf");if(wf)wf.onsubmit=function(e){e.preventDefault();busy(wf.querySelector("button"));post({type:"admin_waste_raw",item:$("wa_i").value,qty:$("wa_q").value,reason:$("wa_r").value}).then(wait)};
-  v.querySelectorAll("[data-w]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_waste_order",row:b.dataset.row,mode:b.dataset.w}).then(wait)}});
+  v.querySelectorAll("[data-cash]").forEach(function(b){b.onclick=function(){busy(b);post({type:"admin_cash",rows:JSON.parse(b.dataset.cash)}).then(wait).catch(saveError)}});
+  var sf=$("sf");if(sf)sf.onsubmit=function(e){e.preventDefault();busy(sf.querySelector("button"));post({type:"admin_stock_add",item:$("sk_i").value,unit:$("sk_u").value,qty:$("sk_q").value,total:$("sk_t").value,supplier:$("sk_s").value}).then(wait).catch(saveError)};
+  var wf=$("wf");if(wf)wf.onsubmit=function(e){e.preventDefault();busy(wf.querySelector("button"));post({type:"admin_waste_raw",item:$("wa_i").value,qty:$("wa_q").value,reason:$("wa_r").value}).then(wait).catch(saveError)};
+  v.querySelectorAll("[data-w]").forEach(function(b){b.onclick=function(){busy(b);(b.dataset.w==="reuse"?reuseOrder(b):post({type:"admin_waste_order",row:b.dataset.row,mode:"waste"})).then(wait).catch(saveError)}});
   var pr=$("prt");if(pr)pr.onclick=function(){window.print()};
   var ef=$("ef");if(ef)ef.onsubmit=function(e){
     e.preventDefault();busy(ef.querySelector("button"));
-    post({type:"admin_expense",date:$("ed").value,cat:$("ec").value,amount:$("ea").value,note:$("en").value}).then(wait);
+    post({type:"admin_expense",date:$("ed").value,cat:$("ec").value,amount:$("ea").value,note:$("en").value}).then(wait).catch(saveError);
   };
 }
-function busy(b){b.disabled=true;b.textContent="Save ho raha hai…"}
-function wait(){setTimeout(function(){load()},1500)}
+function busy(b){saving=true;b.disabled=true;b.textContent="Save ho raha hai…"}
+function wait(){saving=false;return load()}
+function saveError(e){saving=false;alert("Save confirm nahi hua: "+e.message+". Dobara submit karne se pehle refresh karein.");render();}
+function reuseOrder(b){var source=D.o.find(function(o){return String(o.row)===b.dataset.row});var target=prompt("Matching new order ka ID likhein");if(!source||!target)return Promise.reject(Error("Reuse cancelled"));if(!confirm("Confirm: food safely stored hai, fresh hai, aur target order ke items bilkul same hain?"))return Promise.reject(Error("Reuse cancelled"));return post({type:"v2_reuse",token:key,sourceId:source.id,targetId:target.trim(),safeConfirmed:true});}
 function newOrders(){
   var fresh=[];
   if(seen)D.o.forEach(function(o){if(!seen[o.id])fresh.push(o)});
@@ -310,7 +318,7 @@ function beep(){
 }
 $("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Hisaab Portal";tab="Orders";rng="day";q="";render()};
 function typing(){var a=document.activeElement;return a&&(a.tagName==="INPUT"||a.tagName==="SELECT")&&$("view").contains(a)}
-function auto(){if(key&&!$("app").hidden&&!document.hidden&&!typing())load(true)}
+function auto(){if(key&&!saving&&!$("app").hidden&&!document.hidden&&!typing())load(true)}
 setInterval(auto,30000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)auto()});
 key=sessionStorage.getItem("ak")||"";if(key)load();
