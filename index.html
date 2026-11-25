@@ -64,10 +64,11 @@ dialog{border:1px solid var(--gold);border-radius:12px;background:#faf8f1;color:
 dialog form{border:0;border-radius:0;padding:22px;max-width:none;background:transparent}
 dialog::backdrop{background:rgba(8,42,32,.72)}
 @media (max-width:480px){nav a.hide{display:none}.two,.grid{grid-template-columns:1fr}}
+[hidden]{display:none!important}@media(max-width:768px){.wrap{padding:0 14px}nav .wrap{height:60px}nav a{margin-left:12px}section{padding:32px 0}.hero{padding:28px 0}.hero h1{font-size:clamp(48px,13vw,80px)}.grid{grid-template-columns:1fr}.item{border-radius:16px}.qty button{width:44px;height:44px}input,select,textarea{font-size:16px}dialog{max-height:90dvh;overflow:auto;border-radius:20px}#cart{border-radius:18px 18px 0 0}.btn{min-height:44px}}
 </style>
 </head>
 <body>
-<nav><div class="wrap"><b>Aulie Bless</b><div><a class="hide" href="#menu">Menu</a><a class="hide" href="#book">Table</a><a href="#visit">Visit</a></div></div></nav>
+<nav><div class="wrap"><b>Aulie Bless</b><div><a class="hide" href="#menu">Menu</a><a class="hide" href="#book">Table</a><a href="#visit">Visit</a><a href="#account">Account</a></div></div></nav>
 
 <header class="hero"><div class="wrap">
 <h1>Aulie Bless</h1>
@@ -95,12 +96,12 @@ dialog::backdrop{background:rgba(8,42,32,.72)}
 </form>
 </div></section>
 
-<section id="visit"><div class="wrap">
+<section id="account"><div class="wrap"><h2>My account</h2><div id="auth"><form id="otpForm"><label>Name<input id="an" autocomplete="name"></label><label>Email<input id="ae" type="email" required autocomplete="email"></label><button class="btn" type="submit">Send login code</button><label>Login code<input id="ao" inputmode="numeric" maxlength="6"></label><button class="btn" type="button" id="verify">Verify &amp; login</button></form></div><div id="profile" hidden><button class="btn" id="refreshProfile">Refresh orders</button><button class="btn" id="logoutProfile">Logout</button><div id="history"></div><div id="rewards"></div><div id="addresses"></div></div><p id="accountMsg" role="status"></p></div></section><section id="visit"><div class="wrap">
 <h2>Visit us</h2>
 <p class="sub">Find us here.</p>
 <div class="info">
 <div><h3>Timing</h3><p>Daily: 12:00 PM – 12:00 AM<br>Friday: 2:00 PM – 12:00 AM</p></div>
-<div><h3>Address</h3><p>Shop #12, Main Boulevard,<br>Apna Shehar</p><p><a href="https://www.google.com/maps/search/?api=1&query=restaurant" target="_blank" rel="noopener">Open in Google Maps</a></p></div>
+<div><h3>Address</h3><p>Mahalaxmi Tower, Bhande Plot,<br>Opp. Orbit Hospital, Nagpur</p><p><a href="https://www.google.com/maps/search/?api=1&query=Mahalaxmi+Tower+Bhande+Plot+Nagpur" target="_blank" rel="noopener">Open in Google Maps</a></p></div>
 <div><h3>Contact</h3><p>Phone: <a href="tel:+919112626757">+91 91126 26757</a></p></div>
 </div>
 </div></section>
@@ -150,7 +151,7 @@ function items(){
   var g=$("grid");g.innerHTML="";
   MENU[cat].forEach(function(m){
     var k=m[0],q=cart[k]||0,d=document.createElement("div");d.className="item";
-    d.innerHTML='<div class="ic" aria-hidden="true">'+m[3]+'</div><div style="flex:1"><h3>'+k+'</h3><p>'+m[1]+'</p><div class="row"><span class="price">'+rs(m[2])+'</span><div class="qty"><button aria-label="Decrease">−</button><span>'+q+'</span><button aria-label="Increase">+</button></div></div></div>';
+    d.innerHTML='<div class="ic" aria-hidden="true">'+m[3]+'</div><div style="flex:1"><h3>'+esc(k)+'</h3><p>'+esc(m[1])+'</p><div class="row"><span class="price">'+rs(m[2])+'</span><div class="qty"><button aria-label="Decrease">−</button><span>'+q+'</span><button aria-label="Increase">+</button></div></div></div>';
     var bs=d.querySelectorAll("button");
     bs[0].onclick=function(){chg(k,-1)};bs[1].onclick=function(){chg(k,1)};
     g.appendChild(d);
@@ -163,11 +164,7 @@ function bar(){
   $("cart").className=n?"on":"";
   $("ctotal").textContent=rs(t);$("ccount").textContent=n+" item"+(n>1?"s":"");
 }
-function post(o){
-  if(!SCRIPT_URL)return Promise.resolve();
-  var f=fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){});
-  return Promise.race([f,new Promise(function(r){setTimeout(r,5000)})]);
-}
+function post(o){return fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).then(async function(r){if(!r.ok)throw Error("Server unavailable");var t=await r.text();if(t==="OK")return {ok:true};if(t==="DUPLICATE")throw Error("Order ID already exists. Contact cafe before retrying.");var j;try{j=JSON.parse(t)}catch(e){throw Error(t.slice(0,200)||"No confirmation")};if(!j.ok)throw Error(j.error||"Request failed");return j;});}
 function toast(t){var e=$("toast");e.textContent=t;e.style.display="block";setTimeout(function(){e.style.display="none"},6000)}
 function oid(){return "T"+Date.now().toString().slice(-6)+Math.random().toString(36).slice(2,4).toUpperCase()}
 function wa(m){location.href="https://wa.me/"+WA+"?text="+encodeURIComponent(m)}
@@ -198,19 +195,20 @@ $("send").onclick=function(){
 $("cc").onclick=function(){$("dlg").close()};
 $("coForm").onsubmit=function(e){
   e.preventDefault();
-  var id=oid(),l=[],t=0,items=[];
+  var id=pendingId||(pendingId=oid()),l=[],t=0,items=[];
   for(var k in cart){items.push(cart[k]+" x "+k);l.push({n:k,q:cart[k],p:price(k)});t+=cart[k]*price(k)}
   if($("cm").value==="Delivery"&&!loc&&!$("ca").value.trim()){$("cls").textContent="For delivery, please share your location or address.";return}
   var dsc=Math.min(cpn.disc,t);
   var o={type:"order",id:id,name:$("cn").value,phone:$("cp").value,mode:$("cm").value,note:$("ca").value,location:loc,items:items.join(", "),subtotal:t,total:t-dsc,coupon:cpn.code,instructions:$("ci").value,lines:JSON.stringify(l)};
-  abAdd(o);
+  o.token=token;
   $("cs").disabled=true;$("cs").textContent="Sending…";
-  post(o).then(function(){
+  post(o).then(async function(){
+    pendingId="";abAdd(o);if(token&&$("sv").checked&&o.note){try{await post({type:"v2_address_save",token:token,label:$("sn").value,address:o.note,location:o.location})}catch(e){toast("Order saved; address could not be saved.")}}
     var m="Hello! Order #"+id+"\nName: "+o.name+"\nPhone: "+o.phone+"\n"+o.mode+(o.note?" – "+o.note:"")+(o.location?"\nLocation: "+o.location:"")+"\n\n"+items.join("\n")+"\nTotal: "+rs(o.total);
     cart={};loc="";cpn={code:"",disc:0,free:""};$("ci").value="";$("cpn").value="";$("cpm").textContent="";$("sv").checked=false;$("cls").textContent="For delivery, please share your location or address.";bar();items_ui();
     $("dlg").close();$("cs").disabled=false;$("cs").textContent="Send order";
-    done("Order placed!","Order #"+id,items.join(", ")+" · Total: "+rs(o.total),"We are preparing your order. We will call "+o.phone+" if needed.",m);
-  });
+    done("Order placed!","Order #"+id,items.join(", ")+" · Total: "+rs(o.total),"Your order has been received. We will call "+o.phone+" if needed.",m);
+  }).catch(function(e){toast("Order not confirmed: "+e.message);$("cs").disabled=false;$("cs").textContent="Retry order";});
 };
 $("bookForm").onsubmit=function(e){
   e.preventDefault();
@@ -219,7 +217,7 @@ $("bookForm").onsubmit=function(e){
     var m="Hello! Table booking:\nName: "+o.name+"\nPhone: "+o.phone+"\nDate: "+o.date+"\nTime: "+o.time+"\nGuests: "+o.people;
     $("bookForm").reset();
     done("Booking received!",o.date+" · "+o.time,o.people+" guests · "+o.name,"We will contact you on "+o.phone+" to confirm your booking.",m);
-  });
+  }).catch(function(e){toast("Booking not confirmed: "+e.message)});
 };
 var cpn={code:"",disc:0,free:""};
 function sub(){var t=0;for(var k in cart)t+=cart[k]*price(k);return t}
@@ -238,7 +236,7 @@ $("cpa").onclick=function(){
   var b=document.createElement("button");b.type="button";b.className="tab";b.textContent=t;
   b.onclick=function(){var e=$("ci");e.value+=(e.value?", ":"")+t};$("chips").appendChild(b);
 });
-function ab(){try{return JSON.parse(localStorage.getItem("ab")||"[]")}catch(e){return[]}}
+function ab(){if(token)return cloudAddresses;try{return JSON.parse(localStorage.getItem("ab")||"[]")}catch(e){return[]}}
 function abSave(a){try{localStorage.setItem("ab",JSON.stringify(a))}catch(e){}}
 function abUI(){
   var a=ab(),s=$("sa");$("sal").hidden=!a.length;s.innerHTML="";
@@ -246,15 +244,26 @@ function abUI(){
   a.forEach(function(x,i){var p=document.createElement("option");p.value=i;p.textContent=x.n+": "+String(x.a).slice(0,40);s.appendChild(p)});
 }
 $("sa").onchange=function(){var x=ab()[this.value];if(x){$("ca").value=x.a;loc=x.l||"";$("cls").textContent=loc?"Saved location added ✓":""}};
-$("sdl").onclick=function(){var i=$("sa").value;if(i!==""){var a=ab();a.splice(+i,1);abSave(a);abUI()}};
-function abAdd(o){try{
+$("sdl").onclick=async function(){if(token){var x=cloudAddresses[$("sa").value];if(x){try{await post({type:"v2_address_delete",token:token,addressId:x.id});await profileLoad();abUI()}catch(e){toast(e.message)}}return;}var i=$("sa").value;if(i!==""){var a=ab();a.splice(+i,1);abSave(a);abUI()}};
+function abAdd(o){if(token)return;try{
   localStorage.setItem("me",JSON.stringify({n:o.name,p:o.phone}));
   var a=ab(),n=$("sn").value,x=$("ca").value.trim();
   if($("sv").checked&&x){a=a.filter(function(y){return y.n!==n});a.push({n:n,a:x,l:loc});abSave(a)}
 }catch(e){}}
 var items_ui=items;
 var today=new Date().toISOString().slice(0,10);$("bd").min=today;
-tabs();items();
+var token=sessionStorage.getItem("abToken")||"",cloudAddresses=[],pendingId="";
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function profileLoad(){var j=await post({type:"v2_profile",token});cloudAddresses=j.addresses.map(a=>({id:a[0],n:a[2],a:a[3],l:a[4]}));$("auth").hidden=true;$("profile").hidden=false;$("history").innerHTML="<h3>Order history</h3>"+j.orders.slice().reverse().map(o=>{var end=o.timeline[3],m=Math.max(0,Math.round((new Date(end||Date.now())-new Date(o.date))/60000));return '<div class="item"><div><b>#'+esc(o.id)+'</b> · '+esc(o.stage)+'<p>'+esc(o.items)+'</p>'+rs(o.total)+' · '+esc(o.payment)+'<p>'+m+' min '+(end?'total':'so far')+'</p></div></div>'}).join("");$("rewards").innerHTML='<h3>Rewards</h3><p>'+j.count+' completed paid orders</p>'+j.rewards.map(r=>'<p>'+esc(r.milestone)+'th order: '+(r.eligible?'Eligible':'Locked')+' '+esc(r.description)+'</p>').join("");$("addresses").innerHTML='<h3>Saved addresses</h3>'+cloudAddresses.map(a=>'<p>'+esc(a.n)+': '+esc(a.a)+'</p>').join("");}
+function accountError(e){$("accountMsg").textContent=e.message;}
+$("otpForm").onsubmit=async e=>{e.preventDefault();try{await post({type:"v2_send_otp",email:$("ae").value});$("accountMsg").textContent="Code sent. Check your email."}catch(e){accountError(e)}};
+$("verify").onclick=async()=>{try{var j=await post({type:"v2_verify_otp",email:$("ae").value,name:$("an").value,code:$("ao").value});token=j.token;sessionStorage.setItem("abToken",token);await profileLoad();$("accountMsg").textContent="Logged in"}catch(e){accountError(e)}};
+$("refreshProfile").onclick=()=>profileLoad().catch(accountError);
+$("logoutProfile").onclick=()=>{var t=token;token="";cloudAddresses=[];sessionStorage.removeItem("abToken");$("profile").hidden=true;$("auth").hidden=false;$("history").innerHTML="";$("rewards").innerHTML="";$("addresses").innerHTML="";$("accountMsg").textContent="Logged out";post({type:"v2_logout",token:t}).catch(()=>{});};
+if(token)profileLoad().catch(e=>{token="";sessionStorage.removeItem("abToken");accountError(e)});
+$("send").addEventListener("click",()=>{if(token)profileLoad().then(abUI).catch(accountError)});
+$("send").disabled=true;
+fetch(SCRIPT_URL+"?action=menu").then(r=>r.json()).then(j=>{if(!Array.isArray(j.items)||!j.items.length)throw Error("Menu unavailable");var old=MENU;MENU=Object.create(null);j.items.forEach(a=>{var n=String(a[0]),p=Number(a[1]),c=String(a[2]);if(!n||!c||!Number.isFinite(p)||p<0)return;var x=Object.values(old).flat().find(m=>m[0]===n);(MENU[c]||(MENU[c]=[])).push([n,x?x[1]:"",p,x?x[3]:"🍽️"])});cat=Object.keys(MENU)[0];if(!cat)throw Error("Menu empty");tabs();items();$("send").disabled=false;}).catch(()=>{$("grid").textContent="Live menu unavailable. Please refresh after deployment."});
 </script>
 </body>
 </html>
