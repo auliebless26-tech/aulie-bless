@@ -71,11 +71,12 @@ input,select{border-color:#d9cdd1;border-radius:10px}input:focus,select:focus{bo
 .ks button{border-color:#e4c9d0;border-radius:10px}.ks button[aria-pressed="true"]{color:white}
 
 </style>
+<link rel="manifest" href="hisaab.webmanifest"><link rel="apple-touch-icon" href="hisaab-192.png"><meta name="theme-color" content="#a5092c"><style>#portalInstall{display:flex;align-items:center;gap:12px;width:100%;margin-top:20px;padding:14px;text-align:left;background:#fff8f9;color:#a5092c;border:1px solid #ead2d8;border-radius:16px;cursor:pointer;font:inherit}#portalInstall[hidden],#portalInstallHelp[hidden]{display:none!important}#portalInstall img{width:46px;height:46px;border-radius:12px}#portalInstall span{flex:1}#portalInstall small{display:block;color:#666;margin-top:4px}#portalInstallHelp{font-size:14px;color:#666;margin-top:8px}</style>
 </head>
 <body>
 <header><div class="wrap"><h1>Aulie Bless · Hisaab</h1><div id="hb" hidden><button class="btn line sm" id="rf">Refresh</button> <button class="btn line sm" id="lo">Logout</button></div></div></header>
 <div class="wrap">
-<div id="login" class="card"><form id="lf"><h3>Owner login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Hisaab kholein</button><div class="msg" id="lm" style="padding:0"></div></form></div>
+<div id="login" class="card"><form id="lf"><h3>Owner login</h3><label>Password<input id="pw" type="password" required autocomplete="current-password"></label><button class="btn dark" type="submit">Hisaab kholein</button><div class="msg" id="lm" style="padding:0"></div></form><button id="portalInstall" type="button"><img src="hisaab-192.png" alt=""><span><strong>Install Aulie Bless Hisaab App</strong><small>Install on your phone or PC</small></span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg></button><p id="portalInstallHelp" hidden></p></div>
 <div id="app" hidden>
 <div class="tabs" id="tabs"></div>
 <div id="st" class="msg" style="padding:0 0 8px"></div>
@@ -337,5 +338,6 @@ setInterval(auto,30000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)auto()});
 key=sessionStorage.getItem("ak")||"";if(key)load();
 </script>
+<script>(()=>{let pending;const b=document.getElementById('portalInstall'),h=document.getElementById('portalInstallHelp');if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)b.hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pending=e;});window.addEventListener('appinstalled',()=>{pending=null;b.hidden=true;h.hidden=true;});b.addEventListener('click',async()=>{if(pending){const p=pending;pending=null;try{await p.prompt();await p.userChoice;return;}catch(e){}}h.textContent=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)?'Open in Safari, tap Share, then Add to Home Screen.':'Open the browser menu and choose Install app or Add to home screen, if available.';h.hidden=false;});if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});})();</script>
 </body>
 </html>
