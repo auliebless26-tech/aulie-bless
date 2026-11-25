@@ -47,6 +47,7 @@ a{color:var(--em)}
 #pa{display:none}
 @media print{body>*:not(#pa){display:none!important}#pa{display:block;font:14px/1.4 monospace;width:72mm}#pa .big{font-size:18px;font-weight:700;margin:4px 0}#pa h2{font-size:20px}}
 @page{margin:3mm}
+@media(max-width:768px){header .wrap{flex-wrap:wrap}header h1{font-size:21px}.tabs{position:sticky;top:85px;background:var(--paper);padding:8px 0;z-index:4}.tab,.btn,.ks button{min-height:44px}.pay{flex-wrap:wrap}.pay select{max-width:100%}.ks{grid-template-columns:repeat(2,minmax(0,1fr))!important}.card{border-radius:14px}.items{overflow-wrap:anywhere}body{padding-bottom:calc(24px + env(safe-area-inset-bottom))}}
 </style>
 </head>
 <body>
@@ -66,6 +67,7 @@ a{color:var(--em)}
 <div id="pa"></div>
 <script>
 var SCRIPT_URL="https://script.google.com/macros/s/AKfycbz8zq5i_GYrgGoYo7kwS7RxU7ziCMfrM_act9bu6nrD-EtrUG3weFK1P6AzeT-3dEwS/exec";
+var generation=0,loading=false,saving=false;
 var O=[],B=[],tab="Active",key="",seen=null,unread=0;
 var KS=["New","Preparing","Ready","Out","Delivered"],KL={New:"New",Preparing:"Preparing",Ready:"Ready",Out:"On the way",Delivered:"Delivered"};
 var $=function(i){return document.getElementById(i)};
@@ -104,24 +106,24 @@ function wake(){
 }
 ["touchstart","click"].forEach(function(ev){document.addEventListener(ev,function(){actx();wake()},{passive:true})});
 
-function post(o){o.key=key;return fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)}).catch(function(){})}
-function load(auto){
+async function post(o){
+  var r=await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(o)});
+  if(!r.ok)throw Error("Server unavailable");var t=await r.text();if(t==="OK")return {ok:true};var j;try{j=JSON.parse(t)}catch(e){throw Error(t||"No confirmation")};if(!j.ok)throw Error(j.error||"Request failed");return j;
+}
+async function load(auto){
+  if(!key||loading||saving)return;loading=true;var g=generation,k=key;
   if(!auto)$("st").textContent="Loading…";
-  fetch(SCRIPT_URL+"?action=staff&key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(j){
-    if(j.error){logout("Wrong password.");return}
+  try{var r=await fetch(SCRIPT_URL+"?action=staff&key="+encodeURIComponent(k),{cache:"no-store"});var j=await r.json();if(g!==generation)return;
+    if(j.error){logout("Session expired. Please sign in again.");return}
     O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New",ts:[v[12],v[13],v[14],v[15]],ins:v[16]||"",cp:v[17]||"",disc:+v[18]||0,ln:v[20]||"",pm:v[21]||"",boy:String(v[22]||"")}});
     B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
     alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
-  }).catch(function(){$("st").textContent=auto?"Auto-refresh failed, check your internet.":"Could not load data. Check your internet."});
+  }catch(e){if(g===generation){$("st").textContent="Could not load data. Check your internet.";$("lm").textContent="Could not load data. Check deployment.";}}finally{loading=false;}
 }
-function logout(m){key="";stopRing();sessionStorage.removeItem("sk");$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";if(wl){try{wl.release()}catch(e){}wl=null}}
-$("lf").onsubmit=function(e){
-  e.preventDefault();key=$("pw").value;sessionStorage.setItem("sk",key);actx();
-  try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(x){}
-  load();
-};
+function logout(m){var old=key;generation++;key="";stopRing();sessionStorage.removeItem("sk");O=[];B=[];seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Orders";if(wl){try{wl.release()}catch(e){}wl=null}if(old)post({type:"v2_logout",token:old}).catch(function(){});}
+$("lf").onsubmit=async function(e){e.preventDefault();var b=this.querySelector("button"),g=++generation;b.disabled=true;$("lm").textContent="Signing in…";actx();try{var j=await post({type:"v2_login",role:"staff",key:$("pw").value});if(g!==generation)return;key=j.token;sessionStorage.setItem("sk",key);$("pw").value="";$("lm").textContent="";try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(x){}await load();}catch(e){$("lm").textContent="Login failed: "+e.message;}finally{b.disabled=false;}};
 $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
-$("tst").onclick=function(){actx();ring();try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(e){}};
+$("tst").onclick=function(){actx();ring();};
 
 function alertNew(){
   var f=[];if(seen)O.forEach(function(o){if(!seen[o.id])f.push(o)});
@@ -135,7 +137,7 @@ function alertNew(){
 }
 $("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Active";render()};
 
-function save(o){post({type:"staff_order",row:o.row,kitchen:o.k,status:o.pay,pmode:o.pm,boy:o.boy}).then(function(){setTimeout(function(){load(true)},1500)})}
+async function save(o){if(saving||!key)return;saving=true;var g=generation;$("view").querySelectorAll("button,input,select").forEach(e=>e.disabled=true);$("st").textContent="Saving…";try{await post({type:"staff_order",key:key,row:o.row,kitchen:o.k,status:o.pay,pmode:o.pm,boy:o.boy});}catch(e){if(g===generation)alert("Update not confirmed: "+e.message);}finally{saving=false;if(g===generation){render();await load();}}}
 function mins(a,b){var x=new Date(a),y=new Date(b);return a&&b&&!isNaN(x)&&!isNaN(y)?Math.max(0,Math.round((y-x)/60000)):null}
 function tcol(m){return m<=30?"#16794f":m<=40?"#d4b000":m<=50?"#e07b00":"#b83227"}
 function timeline(o){
@@ -143,8 +145,8 @@ function timeline(o){
   var t=o.ts,done=t[3];
   if(o.k==="Delivered"&&!done)return "";
   var m=mins(o.t,done||new Date());if(m===null)return "";
-  var p=[],a=mins(o.t,t[0]),r=mins(t[0],t[1]),d=mins(t[1],t[3]);
-  if(a!==null)p.push("Accept "+a+"m");if(r!==null)p.push("Prepare "+r+"m");if(d!==null)p.push("Delivery "+d+"m");
+  var p=[],a=mins(o.t,t[0]),r=mins(t[0],t[1]),d=mins(t[2],t[3]),w=mins(t[1],t[2]);
+  if(a!==null)p.push("Accept "+a+"m");if(r!==null)p.push("Prepare "+r+"m");if(o.mode==="Delivery"&&w!==null)p.push("Dispatch wait "+w+"m");if(o.mode==="Delivery"&&d!==null)p.push("Delivery "+d+"m");
   return '<div class="tl"><span class="dot" style="background:'+tcol(m)+'"></span><b>'+m+' min'+(done?' total':' so far')+'</b> <small>'+p.join(" · ")+'</small></div>';
 }
 var SHOP={name:"Aulie Bless",line:"Nagpur",phone:"+91 91126 26757"};
@@ -189,14 +191,14 @@ function render(){
        +'<div>'+esc(o.name)+' · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'
        +(o.note||mp?'<small>'+esc(o.note)+(mp?' · <a href="'+esc(mp)+'" target="_blank" rel="noopener">Open map</a>':'')+'</small>':'')
        +'<div class="ks" style="grid-template-columns:repeat('+(o.mode==="Delivery"?5:4)+',1fr)">'+(o.mode==="Delivery"?KS:KS.filter(function(x){return x!=="Out"})).map(function(k){return '<button data-k="'+k+'" aria-pressed="'+(o.k===k)+'">'+KL[k]+'</button>'}).join("")+'</div>'
-       +(o.mode==="Delivery"?'<div class="pay">Delivery boy: <input class="boy" list="boys" value="'+esc(o.boy)+'" placeholder="Name" maxlength="40" style="flex:1"></div>':'')+'<div class="pay"><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="kot">KOT</button><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="bill">Bill</button> Payment: <select>'+[["Pending","Unpaid"],["PaidCash","Paid – Cash"],["PaidOnline","Paid – Online"],["Cancelled","Cancelled"]].map(function(s){var cur=o.pay==="Paid"?(o.pm==="Online"?"PaidOnline":"PaidCash"):o.pay;return '<option value="'+s[0]+'"'+(s[0]===cur?' selected':'')+'>'+s[1]+'</option>'}).join("")+'</select></div></div>';
+       +(o.mode==="Delivery"?'<div class="pay">Delivery boy: <input class="boy" list="boys" value="'+esc(o.boy)+'" placeholder="Name" maxlength="40" style="flex:1"></div>':'')+'<div class="pay"><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="kot">KOT</button><button class="btn line" style="color:var(--em);border-color:var(--em)" data-p="bill">Bill</button> Payment: <select>'+[["Pending","Unpaid"],...(o.pay==="Paid"&&!o.pm?[["PaidUnknown","Paid – mode unknown"]]:[]),["PaidCash","Paid – Cash"],["PaidOnline","Paid – Online"],["Cancelled","Cancelled"]].map(function(s){var cur=o.pay==="Paid"?(o.pm==="Online"?"PaidOnline":o.pm==="Cash"?"PaidCash":"PaidUnknown"):o.pay;return '<option value="'+s[0]+'"'+(s[0]===cur?' selected':'')+'>'+s[1]+'</option>'}).join("")+'</select></div></div>';
     });
   }
   v.innerHTML=h;
   function find(el){var r=+el.closest(".card").dataset.row;return O.filter(function(o){return o.row===r})[0]}
-  v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);o.k=b.dataset.k;render();save(o)}});
-  v.querySelectorAll("select").forEach(function(s){s.onchange=function(){var o=find(s),w=s.value;o.pay=(w==="PaidCash"||w==="PaidOnline")?"Paid":w;if(w==="PaidCash")o.pm="Cash";if(w==="PaidOnline")o.pm="Online";render();save(o)}});
-  v.querySelectorAll(".boy").forEach(function(i){i.onchange=function(){var o=find(i);o.boy=i.value.trim();save(o)}});
+  v.querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var o=find(b);if(saving||loading)return;if(o.pay==="Cancelled")return;var next=KS.indexOf(b.dataset.k),cur=KS.indexOf(o.k);if(next<cur||next>cur+1&&!(o.mode!=="Delivery"&&cur===2&&next===4)){alert("Please follow the order stages in sequence.");return;}o.k=b.dataset.k;render();save(o)}});
+  v.querySelectorAll("select").forEach(function(s){s.onchange=function(){if(saving||loading){render();return;}var o=find(s),w=s.value;if(w==="PaidUnknown")return;if(w==="Cancelled"&&!confirm("Cancel this order?")){render();return;}o.pay=(w==="PaidCash"||w==="PaidOnline")?"Paid":w;if(w==="PaidCash")o.pm="Cash";if(w==="PaidOnline")o.pm="Online";if(o.pay!=="Paid")o.pm="";render();save(o)}});
+  v.querySelectorAll(".boy").forEach(function(i){i.onchange=function(){if(saving||loading)return;var o=find(i);o.boy=i.value.trim();save(o)}});
   var bn={};O.forEach(function(o){if(o.boy)bn[o.boy]=1});$("boys").innerHTML=Object.keys(bn).map(function(n){return '<option value="'+esc(n)+'">'}).join("");
   v.querySelectorAll("[data-p]").forEach(function(b){b.onclick=function(){printDoc(find(b),b.dataset.p)}});
 }
