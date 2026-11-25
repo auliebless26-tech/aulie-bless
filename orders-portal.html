@@ -48,6 +48,20 @@ a{color:var(--em)}
 @media print{body>*:not(#pa){display:none!important}#pa{display:block;font:14px/1.4 monospace;width:72mm}#pa .big{font-size:18px;font-weight:700;margin:4px 0}#pa h2{font-size:20px}}
 @page{margin:3mm}
 @media(max-width:768px){header .wrap{flex-wrap:wrap}header h1{font-size:21px}.tabs{position:sticky;top:85px;background:var(--paper);padding:8px 0;z-index:4}.tab,.btn,.ks button{min-height:44px}.pay{flex-wrap:wrap}.pay select{max-width:100%}.ks{grid-template-columns:repeat(2,minmax(0,1fr))!important}.card{border-radius:14px}.items{overflow-wrap:anywhere}body{padding-bottom:calc(24px + env(safe-area-inset-bottom))}}
+
+/* Aulie Bless matching customer theme */
+:root{--em:#a5092c;--em3:#800b20;--gold:#ffbd19;--gold2:#fff;--paper:#f8f7f5;--ink:#252126;--muted:#68636a;--card:#fff}
+header{background:var(--em3);color:white;border-bottom:3px solid var(--gold)}
+header h1{color:white}
+.btn{background:var(--em);border-color:var(--em);color:white;border-radius:12px}
+.btn.dark{color:white}.btn.line{background:white;color:var(--em);border-color:#ead5da}header .btn.line{background:transparent;color:white;border-color:#ffffff88}
+.tab{background:white;border-color:#ead5da;color:var(--em)}.tab[aria-pressed="true"]{background:var(--em);color:white;border-color:var(--em);box-shadow:inset 0 -3px 0 var(--gold)}
+.card,#login,.stats div{background:white;border-color:#eadfe2;border-radius:16px;box-shadow:0 3px 12px #39202a0d}
+input,select{border-color:#d9cdd1;border-radius:10px}input:focus,select:focus{border-color:var(--em)}
+.row{border-top-color:#eee5e7}.chip{background:#f2edef}
+.hero{background:var(--em3);color:white;border-color:var(--gold)}.stats div{border-top-color:var(--gold)}
+.ks button{border-color:#e4c9d0;border-radius:10px}.ks button[aria-pressed="true"]{color:white}
+
 </style>
 </head>
 <body>
