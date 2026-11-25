@@ -1,0 +1,3 @@
+self.addEventListener('install',()=>self.skipWaiting());
+self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&e.request.mode==='navigate'&&new URL(e.request.url).origin===self.location.origin)e.respondWith(fetch(e.request).catch(()=>new Response('Internet connection required to order. Please reconnect.',{headers:{'Content-Type':'text/plain'}})));});
