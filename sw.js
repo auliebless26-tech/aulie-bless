@@ -1,3 +1,8 @@
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&e.request.mode==='navigate'&&new URL(e.request.url).origin===self.location.origin)e.respondWith(fetch(e.request).catch(()=>new Response('Internet connection required to order. Please reconnect.',{headers:{'Content-Type':'text/plain'}})));});
+
+importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js","https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
+firebase.initializeApp({"apiKey": "AIzaSyCO5SNmbsHTW-yVdENDLgTPwV_7gELc4SU", "authDomain": "aulie-bless.firebaseapp.com", "projectId": "aulie-bless", "storageBucket": "aulie-bless.firebasestorage.app", "messagingSenderId": "426161220108", "appId": "1:426161220108:web:274211d3a9fdc622759c29"});
+firebase.messaging().onBackgroundMessage(function(p){var d=p.data||{};var portal=d.portal==='hisaab.html'?'hisaab.html':'orders.html';return self.registration.showNotification(d.title||'Aulie Bless',{body:d.body||'New order',icon:portal==='hisaab.html'?'./hisaab-192.png':'./orders-192.png',tag:'ab-'+(d.id||'order'),data:{portal:portal}});});
+self.addEventListener('notificationclick',function(e){e.notification.close();var portal=e.notification.data&&e.notification.data.portal==='hisaab.html'?'hisaab.html':'orders.html';var url=new URL(portal,self.registration.scope).href;e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(function(cs){for(var c of cs){if(c.url===url)return c.focus();}return self.clients.openWindow(url);}));});
