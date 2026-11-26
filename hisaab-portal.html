@@ -127,10 +127,10 @@ function load(auto){
     D.s=(j.stock||[]).map(function(r){var v=r.v;return {name:String(v[0]),unit:String(v[1]),qty:+v[2]||0,low:+v[3]||0,avg:+v[4]||0,sup:String(v[5]||"")}});
     D.p=(j.purchases||[]).map(function(r){var v=r.v;return {day:dk(v[0]),item:String(v[1]),sup:String(v[2]),unit:+v[5]||0}});
     D.w=(j.waste||[]).map(function(r){var v=r.v;return {day:dk(v[0]),what:String(v[1]),qty:v[2],reason:String(v[3]||""),loss:+v[4]||0,type:String(v[5])}});
-    newOrders();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
+    syncOrderAlarm(D.o);$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();
   }).catch(function(){if(g!==generation)return;$("st").textContent="Data nahi aaya. Internet ya deployment check karein.";$("lm").textContent=$("st").textContent;}).finally(function(){loading=false;});
 }
-function logout(m){var old=key;generation++;key="";sessionStorage.removeItem("ak");D={o:[],e:[],b:[],s:[],p:[],w:[]};seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Hisaab Portal";if(old)post({type:"v2_logout",token:old}).catch(function(){});}
+function logout(m){var old=key;generation++;key="";clearOrderAlarm();sessionStorage.removeItem("ak");D={o:[],e:[],b:[],s:[],p:[],w:[]};seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Hisaab Portal";if(old)post({type:"v2_logout",token:old}).catch(function(){});}
 $("lf").onsubmit=async function(e){e.preventDefault();var b=this.querySelector("button"),g=++generation;b.disabled=true;$("lm").textContent="Signing in…";try{var j=await post({type:"v2_login",role:"admin",key:$("pw").value});if(g!==generation)return;key=j.token;sessionStorage.setItem("ak",key);$("pw").value="";$("lm").textContent="";await load();}catch(e){if(g===generation)$("lm").textContent=e.message;}finally{b.disabled=false;}};
 $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
 
@@ -314,28 +314,23 @@ function busy(b){saving=true;b.disabled=true;b.textContent="Save ho raha hai…"
 function wait(){saving=false;return load()}
 function saveError(e){saving=false;alert("Save confirm nahi hua: "+e.message+". Dobara submit karne se pehle refresh karein.");render();}
 function reuseOrder(b){var source=D.o.find(function(o){return String(o.row)===b.dataset.row});var target=prompt("Matching new order ka ID likhein");if(!source||!target)return Promise.reject(Error("Reuse cancelled"));if(!confirm("Confirm: food safely stored hai, fresh hai, aur target order ke items bilkul same hain?"))return Promise.reject(Error("Reuse cancelled"));return post({type:"v2_reuse",token:key,sourceId:source.id,targetId:target.trim(),safeConfirmed:true});}
-function newOrders(){
-  var fresh=[];
-  if(seen)D.o.forEach(function(o){if(!seen[o.id])fresh.push(o)});
-  seen={};D.o.forEach(function(o){seen[o.id]=1});
-  if(!fresh.length)return;
-  unread+=fresh.length;
-  var o=fresh[fresh.length-1];
-  $("nb").hidden=false;
-  $("nb").textContent="🔔 "+unread+" naya order: #"+o.id+" · "+o.name+" · "+rs(o.total)+" (dekhne ke liye dabayein)";
-  document.title="("+unread+") Naya order – Aulie Bless";
-  beep();
-}
-function beep(){
-  try{var a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();
-  o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.value=0.15;o.start();
-  setTimeout(function(){o.stop();a.close()},400)}catch(e){}
-}
-$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Hisaab Portal";tab="Orders";rng="day";q="";render()};
 function typing(){var a=document.activeElement;return a&&(a.tagName==="INPUT"||a.tagName==="SELECT")&&$("view").contains(a)}
 function auto(){if(key&&!saving&&!$("app").hidden&&!document.hidden&&!typing())load(true)}
-setInterval(auto,30000);
+setInterval(auto,5000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)auto()});
+
+var alarmAudio=null, alarmTimer=null, alarmDeadline=0, alarmKnown=new Map(), alarmActive=new Map(), alarmNodes=new Set();
+function unlockOrderAlarm(){try{if(!alarmAudio)alarmAudio=new (window.AudioContext||window.webkitAudioContext)();if(alarmAudio.state==='suspended')alarmAudio.resume().catch(()=>{});}catch(e){}}
+function alarmPulse(){if(!alarmAudio||alarmAudio.state!=='running')return;try{let o=alarmAudio.createOscillator(),g=alarmAudio.createGain(),t=alarmAudio.currentTime;o.type='square';o.frequency.setValueAtTime(740,t);o.frequency.setValueAtTime(1040,t+.23);g.gain.setValueAtTime(.13,t);g.gain.setValueAtTime(0,t+.48);o.connect(g);g.connect(alarmAudio.destination);alarmNodes.add(o);o.onended=()=>{alarmNodes.delete(o);o.disconnect();g.disconnect()};o.start(t);o.stop(t+.5);}catch(e){}}
+function silenceOrderAlarm(){clearInterval(alarmTimer);alarmTimer=null;alarmNodes.forEach(o=>{try{o.stop()}catch(e){}});alarmNodes.clear();try{navigator.vibrate?.(0)}catch(e){}}
+function clearOrderAlarm(){silenceOrderAlarm();alarmActive.clear();alarmKnown.clear();}
+function alarmTick(){let now=Date.now();for(let [id,end] of alarmActive)if(end<=now)alarmActive.delete(id);if(!alarmActive.size){silenceOrderAlarm();return;}alarmPulse();try{navigator.vibrate?.([250,100,250])}catch(e){}}
+function startOrderAlarm(){if(!alarmTimer){alarmTick();if(alarmActive.size)alarmTimer=setInterval(alarmTick,800);}}
+function testOrderAlarm(){alarmActive.set('__test',Date.now()+5000);startOrderAlarm();}
+function syncOrderAlarm(list){let pending=list.filter(o=>String(o.k||o.kitchen)==='New'&&String(o.pay||o.status)!=='Cancelled');let ids=new Set(pending.map(o=>String(o.id)));for(let id of alarmActive.keys())if(id!=='__test'&&!ids.has(id))alarmActive.delete(id);for(let o of pending){let id=String(o.id);if(!alarmKnown.has(id)){alarmKnown.set(id,true);alarmActive.set(id,Date.now()+60000);}}if(alarmActive.size)startOrderAlarm();else silenceOrderAlarm();let b=$('nb');b.hidden=!pending.length;b.textContent=pending.length?'🔔 '+pending.length+' order(s) awaiting acceptance · #'+pending[pending.length-1].id:'';document.title=pending.length?'('+pending.length+') New orders – Aulie Bless':'Aulie Bless – hisaab';}
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,unlockOrderAlarm,{passive:true}));
+$('nb').onclick=function(){tab="Orders";rng="all";q="";render();};
+var testButton=document.createElement('button');testButton.type='button';testButton.className='btn line';testButton.textContent='🔔 Enable / test alarm';testButton.onclick=function(){unlockOrderAlarm();testOrderAlarm();};$('hb').appendChild(testButton);
 key=sessionStorage.getItem("ak")||"";if(key)load();
 </script>
 <script>(()=>{let pending;const b=document.getElementById('portalInstall'),h=document.getElementById('portalInstallHelp');if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)b.hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pending=e;});window.addEventListener('appinstalled',()=>{pending=null;b.hidden=true;h.hidden=true;});b.addEventListener('click',async()=>{if(pending){const p=pending;pending=null;try{await p.prompt();await p.userChoice;return;}catch(e){}}h.textContent=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)?'Open in Safari, tap Share, then Add to Home Screen.':'Open the browser menu and choose Install app or Add to home screen, if available.';h.hidden=false;});if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});})();</script>
