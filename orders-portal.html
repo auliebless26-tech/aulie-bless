@@ -109,7 +109,7 @@ function ring(){
   step();ringT=setInterval(step,900);$("stop").hidden=false;
 }
 function stopRing(){if(ringT)clearInterval(ringT);ringT=null;$("stop").hidden=true}
-$("stop").onclick=stopRing;
+$("stop").onclick=function(){clearOrderAlarm();};
 
 /* ---- Screen on rakhna ---- */
 function wake(){
@@ -132,25 +132,14 @@ async function load(auto){
     if(j.error){logout("Session expired. Please sign in again.");return}
     O=j.orders.map(function(r){var v=r.v;return {row:r.row,id:v[0],t:v[1],name:v[2],phone:v[3],mode:v[4],note:v[5],items:v[6]||"",total:+v[7]||0,pay:v[8]||"Pending",loc:v[10]||"",k:v[11]||"New",ts:[v[12],v[13],v[14],v[15]],ins:v[16]||"",cp:v[17]||"",disc:+v[18]||0,ln:v[20]||"",pm:v[21]||"",boy:String(v[22]||"")}});
     B=j.bookings.map(function(r){var v=r.v;return {name:v[1],phone:v[2],date:v[3],time:v[4],people:v[5]}});
-    alertNew();$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
+    syncOrderAlarm(O);$("login").hidden=true;$("app").hidden=false;$("hb").hidden=false;$("st").textContent="";render();wake();
   }catch(e){if(g===generation){$("st").textContent="Could not load data. Check your internet.";$("lm").textContent="Could not load data. Check deployment.";}}finally{loading=false;}
 }
-function logout(m){var old=key;generation++;key="";stopRing();sessionStorage.removeItem("sk");O=[];B=[];seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Orders";if(wl){try{wl.release()}catch(e){}wl=null}if(old)post({type:"v2_logout",token:old}).catch(function(){});}
+function logout(m){var old=key;generation++;key="";stopRing();clearOrderAlarm();sessionStorage.removeItem("sk");O=[];B=[];seen=null;unread=0;$("view").innerHTML="";$("nb").hidden=true;$("pw").value="";$("app").hidden=true;$("hb").hidden=true;$("login").hidden=false;$("lm").textContent=m||"";document.title="Aulie Bless – Orders";if(wl){try{wl.release()}catch(e){}wl=null}if(old)post({type:"v2_logout",token:old}).catch(function(){});}
 $("lf").onsubmit=async function(e){e.preventDefault();var b=this.querySelector("button"),g=++generation;b.disabled=true;$("lm").textContent="Signing in…";actx();try{var j=await post({type:"v2_login",role:"staff",key:$("pw").value});if(g!==generation)return;key=j.token;sessionStorage.setItem("sk",key);$("pw").value="";$("lm").textContent="";try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(x){}await load();}catch(e){$("lm").textContent="Login failed: "+e.message;}finally{b.disabled=false;}};
 $("rf").onclick=function(){load()};$("lo").onclick=function(){logout()};
-$("tst").onclick=function(){actx();ring();};
+$("tst").onclick=function(){unlockOrderAlarm();testOrderAlarm();};
 
-function alertNew(){
-  var f=[];if(seen)O.forEach(function(o){if(!seen[o.id])f.push(o)});
-  seen={};O.forEach(function(o){seen[o.id]=1});
-  if(!f.length)return;
-  unread+=f.length;var o=f[f.length-1];
-  $("nb").hidden=false;$("nb").textContent="🔔 "+unread+" new order: #"+o.id+" · "+o.name+" (tap to view)";
-  document.title="("+unread+") New order – Aulie Bless";
-  ring();
-  try{if("Notification" in window&&Notification.permission==="granted")new Notification("New order #"+o.id,{body:o.name+" · "+rs(o.total),requireInteraction:true})}catch(e){}
-}
-$("nb").onclick=function(){unread=0;this.hidden=true;document.title="Aulie Bless – Orders";tab="Active";render()};
 
 async function save(o){if(saving||!key)return;saving=true;var g=generation;$("view").querySelectorAll("button,input,select").forEach(e=>e.disabled=true);$("st").textContent="Saving…";try{await post({type:"staff_order",key:key,row:o.row,kitchen:o.k,status:o.pay,pmode:o.pm,boy:o.boy});}catch(e){if(g===generation)alert("Update not confirmed: "+e.message);}finally{saving=false;if(g===generation){render();await load();}}}
 function mins(a,b){var x=new Date(a),y=new Date(b);return a&&b&&!isNaN(x)&&!isNaN(y)?Math.max(0,Math.round((y-x)/60000)):null}
@@ -220,6 +209,19 @@ function render(){
 function auto(){var a=document.activeElement;if(key&&!$("app").hidden&&!(a&&(a.tagName==="SELECT"||a.tagName==="INPUT")))load(true)}
 setInterval(auto,5000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden){auto();wake()}});
+
+var alarmAudio=null, alarmTimer=null, alarmDeadline=0, alarmKnown=new Map(), alarmActive=new Map(), alarmNodes=new Set();
+function unlockOrderAlarm(){try{if(!alarmAudio)alarmAudio=new (window.AudioContext||window.webkitAudioContext)();if(alarmAudio.state==='suspended')alarmAudio.resume().catch(()=>{});}catch(e){}}
+function alarmPulse(){if(!alarmAudio||alarmAudio.state!=='running')return;try{let o=alarmAudio.createOscillator(),g=alarmAudio.createGain(),t=alarmAudio.currentTime;o.type='square';o.frequency.setValueAtTime(740,t);o.frequency.setValueAtTime(1040,t+.23);g.gain.setValueAtTime(.13,t);g.gain.setValueAtTime(0,t+.48);o.connect(g);g.connect(alarmAudio.destination);alarmNodes.add(o);o.onended=()=>{alarmNodes.delete(o);o.disconnect();g.disconnect()};o.start(t);o.stop(t+.5);}catch(e){}}
+function silenceOrderAlarm(){clearInterval(alarmTimer);alarmTimer=null;alarmNodes.forEach(o=>{try{o.stop()}catch(e){}});alarmNodes.clear();try{navigator.vibrate?.(0)}catch(e){}}
+function clearOrderAlarm(){silenceOrderAlarm();alarmActive.clear();alarmKnown.clear();}
+function alarmTick(){let now=Date.now();for(let [id,end] of alarmActive)if(end<=now)alarmActive.delete(id);if(!alarmActive.size){silenceOrderAlarm();return;}alarmPulse();try{navigator.vibrate?.([250,100,250])}catch(e){}}
+function startOrderAlarm(){if(!alarmTimer){alarmTick();if(alarmActive.size)alarmTimer=setInterval(alarmTick,800);}}
+function testOrderAlarm(){alarmActive.set('__test',Date.now()+5000);startOrderAlarm();}
+function syncOrderAlarm(list){let pending=list.filter(o=>String(o.k||o.kitchen)==='New'&&String(o.pay||o.status)!=='Cancelled');let ids=new Set(pending.map(o=>String(o.id)));for(let id of alarmActive.keys())if(id!=='__test'&&!ids.has(id))alarmActive.delete(id);for(let o of pending){let id=String(o.id);if(!alarmKnown.has(id)){alarmKnown.set(id,true);alarmActive.set(id,Date.now()+60000);}}if(alarmActive.size)startOrderAlarm();else silenceOrderAlarm();let b=$('nb');b.hidden=!pending.length;b.textContent=pending.length?'🔔 '+pending.length+' order(s) awaiting acceptance · #'+pending[pending.length-1].id:'';document.title=pending.length?'('+pending.length+') New orders – Aulie Bless':'Aulie Bless – orders';}
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,unlockOrderAlarm,{passive:true}));
+$('nb').onclick=function(){tab="Active";render();};
+var testButton=document.createElement('button');testButton.type='button';testButton.className='btn line';testButton.textContent='🔔 Enable / test alarm';testButton.onclick=function(){unlockOrderAlarm();testOrderAlarm();};$('hb').appendChild(testButton);
 key=sessionStorage.getItem("sk")||"";if(key)load();
 </script>
 <script>(()=>{let pending;const b=document.getElementById('portalInstall'),h=document.getElementById('portalInstallHelp');if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)b.hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pending=e;});window.addEventListener('appinstalled',()=>{pending=null;b.hidden=true;h.hidden=true;});b.addEventListener('click',async()=>{if(pending){const p=pending;pending=null;try{await p.prompt();await p.userChoice;return;}catch(e){}}h.textContent=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)?'Open in Safari, tap Share, then Add to Home Screen.':'Open the browser menu and choose Install app or Add to home screen, if available.';h.hidden=false;});if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});})();</script>
